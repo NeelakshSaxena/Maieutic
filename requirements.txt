@@ -1,0 +1,8 @@
+datasets
+pandas
+tqdm
+datasketch
+pyarrow
+pydantic
+python-dotenv
+tabulate

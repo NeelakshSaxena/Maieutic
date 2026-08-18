@@ -1,0 +1,11 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.cache/
+training/datasets/raw/
+training/datasets/normalized/
+training/datasets/cleaned/
+training/datasets/deduplicated/
+training/datasets/final/

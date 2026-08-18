@@ -82,4 +82,4 @@ Model release requires:
 - No critical regression
 - Acceptable latency
 - Acceptable inference cost
-- Acceptable answer leakage
+- Acceptable answer leakaged

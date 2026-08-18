@@ -86,4 +86,4 @@ The LLM cannot directly decide:
 
 It can recommend a state.
 
-Backend validates the recommendation against protocol rules.
+Backend validates the recommendation against protocol rules.d

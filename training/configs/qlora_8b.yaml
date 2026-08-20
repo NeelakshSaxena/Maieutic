@@ -1,0 +1,26 @@
+model_id: "Qwen/Qwen2.5-8B-Instruct"
+output_dir: "./outputs/qwen-8b-socratic-v1"
+max_seq_length: 4096
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 4
+learning_rate: 2e-5
+logging_steps: 1
+max_steps: 10 # Smoke test limit, change to -1 and set num_train_epochs for full run
+save_steps: 10
+warmup_ratio: 0.05
+lr_scheduler_type: "cosine"
+bf16: true
+
+# QLoRA parameters
+use_4bit: true
+r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules: 
+  - "q_proj"
+  - "k_proj"
+  - "v_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"

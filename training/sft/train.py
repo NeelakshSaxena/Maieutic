@@ -11,6 +11,45 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from dataset import load_and_format_dataset
+from transformers import TrainerCallback
+import json
+import time
+
+class MonitorCallback(TrainerCallback):
+    def __init__(self):
+        self.metrics_dir = os.path.join(os.path.dirname(__file__), "../outputs/monitor")
+        os.makedirs(self.metrics_dir, exist_ok=True)
+        self.metrics_file = os.path.join(self.metrics_dir, "metrics.jsonl")
+        
+    def _write_metric(self, status, state, metrics=None):
+        record = {
+            "step": state.global_step,
+            "epoch": state.epoch if state.epoch else 0.0,
+            "status": status,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        }
+        if metrics:
+            record["loss"] = metrics.get("loss", 0.0)
+            record["learning_rate"] = metrics.get("learning_rate", 0.0)
+            # Add speed metrics if available (usually only at end or if logged)
+        
+        with open(self.metrics_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self._write_metric("TRAINING", state)
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        self._write_metric("TRAINING", state, logs)
+
+    def on_save(self, args, state, control, **kwargs):
+        self._write_metric("CHECKPOINTING", state)
+
+    def on_train_end(self, args, state, control, **kwargs):
+        self._write_metric("COMPLETED", state)
+
+
+from dataset import load_and_format_dataset
 
 def parse_args():
     parser = argparse.ArgumentParser(description="MentorAI SFT Training")
@@ -112,6 +151,7 @@ def main():
             report_to = report_to,
             save_steps = config["save_steps"]
         ),
+        callbacks=[MonitorCallback()],
     )
 
     print(f"Starting training ({'SMOKE TEST' if args.smoke_test else 'FULL RUN'})...")

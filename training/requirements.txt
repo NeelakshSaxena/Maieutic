@@ -9,3 +9,6 @@ wandb
 openai
 python-dotenv
 deepspeed
+lm-eval
+pydantic
+flask

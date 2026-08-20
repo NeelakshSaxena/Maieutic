@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MentorAI Training Dashboard</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { border-bottom: 1px solid #333; padding-bottom: 10px; color: #fff; }
+        .header-panel, .grid-panel { background: #1e1e1e; border-radius: 8px; padding: 15px 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .grid-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #333; }
+        th { color: #888; text-transform: uppercase; font-size: 0.85em; }
+        .status-box { display: inline-block; padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 0.9em; }
+        .status-TRAINING { background-color: #0d47a1; color: #fff; }
+        .status-CHECKPOINTING { background-color: #e65100; color: #fff; }
+        .status-COMPLETED { background-color: #1b5e20; color: #fff; }
+        .status-FAILED { background-color: #b71c1c; color: #fff; }
+        .status-NOT_STARTED { background-color: #424242; color: #fff; }
+        .mock-badge { background-color: #fbc02d; color: #000; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; margin-left: 10px; display: none; }
+        .log-box { background: #000; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.9em; color: #0f0; max-height: 200px; overflow-y: auto; }
+        .log-entry { margin: 4px 0; }
+        .label { color: #888; font-size: 0.85em; text-transform: uppercase; }
+        .value { font-size: 1.2em; font-weight: bold; margin-bottom: 10px; display: block; color: #fff; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>MentorAI &mdash; Phase 2 Training <span id="mock-badge" class="mock-badge">MOCK DATA</span></h1>
+    
+    <div class="header-panel">
+        <div><span class="label">Status:</span> <span id="status" class="status-box status-NOT_STARTED">NOT STARTED</span></div>
+        <div style="margin-top:10px;">
+            <span class="label">Model:</span> <span class="value" style="display:inline; margin-right:20px;">Qwen3-8B</span>
+            <span class="label">Method:</span> <span class="value" style="display:inline; margin-right:20px;">QLoRA</span>
+            <span class="label">GPU:</span> <span class="value" style="display:inline;">RTX 4090 24GB</span>
+        </div>
+    </div>
+
+    <div class="header-panel">
+        <table>
+            <tr><th>Step</th><th>Epoch</th><th>Loss</th><th>Learning Rate</th></tr>
+            <tr>
+                <td id="step" style="font-weight:bold; font-size:1.1em;">0</td>
+                <td id="epoch" style="font-weight:bold; font-size:1.1em;">0.00</td>
+                <td id="loss" style="font-weight:bold; font-size:1.1em; color:#ef9a9a;">0.000</td>
+                <td id="lr" style="font-weight:bold; font-size:1.1em; color:#81d4fa;">0.000</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="grid-panel">
+        <div>
+            <span class="label">GPU VRAM</span>
+            <span class="value"><span id="gpu-mem-used">0</span> / <span id="gpu-mem-total">0</span></span>
+            
+            <span class="label">GPU Util</span>
+            <span class="value" id="gpu-util">0%</span>
+            
+            <span class="label">GPU Temp</span>
+            <span class="value" id="gpu-temp">0°C</span>
+        </div>
+        <div>
+            <span class="label">Tokens / Sec</span>
+            <span class="value" id="tokens-sec">N/A</span>
+            
+            <span class="label">Samples / Sec</span>
+            <span class="value" id="samples-sec">N/A</span>
+        </div>
+    </div>
+
+    <div class="header-panel">
+        <span class="label">Recent Training Events</span>
+        <div class="log-box" id="recent-logs">
+        </div>
+    </div>
+</div>
+
+<script>
+    async function fetchMetrics() {
+        try {
+            const response = await fetch("/api/metrics");
+            const data = await response.json();
+
+            // Update Status
+            const statusEl = document.getElementById("status");
+            statusEl.className = "status-box status-" + data.status;
+            statusEl.textContent = data.status.replace("_", " ");
+
+            // Mock badge
+            const mockBadge = document.getElementById("mock-badge");
+            if (data.is_mock) {
+                mockBadge.style.display = "inline-block";
+            } else {
+                mockBadge.style.display = "none";
+            }
+
+            // Training Stats
+            document.getElementById("step").textContent = data.step || 0;
+            document.getElementById("epoch").textContent = (data.epoch || 0).toFixed(4);
+            document.getElementById("loss").textContent = (data.loss || 0).toFixed(4);
+            document.getElementById("lr").textContent = (data.learning_rate || 0).toExponential(2);
+            
+            // Performance stats
+            if (data.tokens_per_second) document.getElementById("tokens-sec").textContent = data.tokens_per_second.toFixed(1);
+            if (data.samples_per_second) document.getElementById("samples-sec").textContent = data.samples_per_second.toFixed(2);
+
+            // GPU Stats
+            if (data.gpu) {
+                document.getElementById("gpu-mem-used").textContent = data.gpu.memory_used || "N/A";
+                document.getElementById("gpu-mem-total").textContent = data.gpu.memory_total || "N/A";
+                document.getElementById("gpu-util").textContent = data.gpu.utilization || "N/A";
+                document.getElementById("gpu-temp").textContent = data.gpu.temperature ? data.gpu.temperature + "°C" : "N/A";
+            }
+
+            // Logs
+            const logsContainer = document.getElementById("recent-logs");
+            logsContainer.innerHTML = "";
+            if (data.recent_logs && data.recent_logs.length > 0) {
+                data.recent_logs.forEach(log => {
+                    const div = document.createElement("div");
+                    div.className = "log-entry";
+                    div.textContent = `[Step ${log.step || '?'}] Loss: ${log.loss ? log.loss.toFixed(4) : '-'} | Epoch: ${log.epoch ? log.epoch.toFixed(4) : '-'} | Status: ${log.status || 'TRAINING'}`;
+                    logsContainer.appendChild(div);
+                });
+            } else {
+                logsContainer.innerHTML = "<div class='log-entry'>Waiting for training logs...</div>";
+            }
+        } catch (e) {
+            console.error("Error fetching metrics", e);
+        }
+    }
+
+    // Poll every 2 seconds
+    setInterval(fetchMetrics, 2000);
+    fetchMetrics();
+</script>
+</body>
+</html>

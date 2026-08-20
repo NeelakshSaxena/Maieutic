@@ -5,8 +5,9 @@ per_device_train_batch_size: 2
 gradient_accumulation_steps: 4
 learning_rate: 2e-5
 logging_steps: 1
-max_steps: 10 # Smoke test limit, change to -1 and set num_train_epochs for full run
-save_steps: 10
+max_steps: -1
+num_train_epochs: 1
+save_steps: 500
 warmup_ratio: 0.05
 lr_scheduler_type: "cosine"
 bf16: true

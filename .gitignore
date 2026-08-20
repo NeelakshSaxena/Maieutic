@@ -10,3 +10,8 @@ training/datasets/cleaned/
 training/datasets/deduplicated/
 training/datasets/final/
 training/datasets/processed/
+*.log
+*.pid
+unsloth_compiled_cache/
+outputs/
+.agents/

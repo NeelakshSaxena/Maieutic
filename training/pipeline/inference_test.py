@@ -3,7 +3,8 @@ from unsloth import FastLanguageModel
 from unsloth.chat_templates import get_chat_template
 
 def main():
-    adapter_path = "../outputs/qwen-8b-socratic-v1"
+    # Resolve path relative to script location so it works from anywhere
+    adapter_path = os.path.join(os.path.dirname(__file__), "../../outputs/qwen-8b-socratic-v1")
     
     if not os.path.exists(adapter_path):
         print(f"Error: Adapter path {adapter_path} not found. Run the 10-step smoke test first.")

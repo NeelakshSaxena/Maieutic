@@ -34,6 +34,14 @@ def load_and_format_dataset(file_paths=None, tokenizer=None, max_samples=None):
             
     # Fallback to local files if no HF samples were loaded
     if not samples and file_paths:
+        # Load benchmark IDs if present to exclude them
+        benchmark_ids_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "evaluation", "benchmark_ids.json")
+        exclude_ids = set()
+        if os.path.exists(benchmark_ids_path):
+            with open(benchmark_ids_path, "r", encoding="utf-8") as bf:
+                exclude_ids = set(json.load(bf))
+                print(f"Loaded {len(exclude_ids)} benchmark IDs to exclude from training.")
+                
         count = 0
         for path in file_paths:
             if not os.path.exists(path):
@@ -44,7 +52,10 @@ def load_and_format_dataset(file_paths=None, tokenizer=None, max_samples=None):
                 for line in f:
                     if max_samples and count >= max_samples:
                         break
-                    samples.append(json.loads(line))
+                    sample = json.loads(line)
+                    if sample.get("id") in exclude_ids:
+                        continue
+                    samples.append(sample)
                     count += 1
 
     if not samples:

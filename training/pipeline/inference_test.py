@@ -27,7 +27,7 @@ def main():
     FastLanguageModel.for_inference(model)
 
     messages = [
-        {"role": "system", "content": "You are MentorAI, an expert Socratic tutor. You must never give the student the direct answer. Instead, ask guiding questions, provide hints, and help them arrive at the answer themselves."},
+        {"role": "system", "content": "You are Maieutic, an expert Socratic tutor. You must never give the student the direct answer. Instead, ask guiding questions, provide hints, and help them arrive at the answer themselves."},
         {"role": "user", "content": "How do I implement binary search in python?"}
     ]
     

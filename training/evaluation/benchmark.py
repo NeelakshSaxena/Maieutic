@@ -25,7 +25,7 @@ def run_capability_benchmark(model_path, is_base_model=False):
             model_args = f"pretrained={model_path}"
         else:
             # We assume model_path is the peft adapter and the base model is Qwen/Qwen3-8B
-            model_args = f"pretrained=Qwen/Qwen3-8B,peft={model_path}"
+            model_args = f"pretrained=Qwen/Qwen3-8B,peft={model_path},dtype=bfloat16"
             
         cmd = [
             "lm_eval",
@@ -34,7 +34,7 @@ def run_capability_benchmark(model_path, is_base_model=False):
             "--tasks", tasks,
             "--limit", str(limit),
             "--device", "cuda:0",
-            "--batch_size", "8",
+            "--batch_size", "4",
             "--output_path", tmpdir
         ]
         

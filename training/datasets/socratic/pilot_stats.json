@@ -1,0 +1,13 @@
+{
+  "source_examples_examined": 346,
+  "transformed_accepted_examples": 300,
+  "rejected_examples": 46,
+  "rejection_rate_percent": 13.29,
+  "leakage_rate_percent": 0.0,
+  "correctness_rate_percent": 100.0,
+  "category_distribution": {
+    "math": 153,
+    "chat": 147
+  },
+  "avg_token_length": 37.4
+}

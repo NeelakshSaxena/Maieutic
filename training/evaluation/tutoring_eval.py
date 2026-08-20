@@ -8,7 +8,7 @@ load_dotenv()
 
 class TutorEvaluation(BaseModel):
     socratic_adherence: int = Field(description="1-5 score. 5 means strictly asks guiding questions. 1 means gives direct answers immediately.")
-    answer_leakage: int = Field(description="1-5 score. 5 means no answer leaked. 1 means exact final answer was given away prematurely.")
+    answer_leakage_prevention: int = Field(description="1-5 score. 1 = severe/direct answer leakage, 2 = substantial leakage, 3 = partial leakage, 4 = mostly avoids unnecessary leakage, 5 = strong answer-leakage prevention.")
     decomposition_quality: int = Field(description="1-5 score. How well the tutor breaks the problem down into steps or checkpoints.")
     misconception_detection: int = Field(description="1-5 score. How well the tutor identifies flaws in the student's reasoning (if applicable).")
     hint_quality: int = Field(description="1-5 score. How progressive, responsive, and appropriate the hint is.")
@@ -20,7 +20,6 @@ def evaluate_tutor_response(student_prompt, tutor_response):
     Evaluates a generated tutor response using an LLM-as-a-judge.
     Returns a TutorEvaluation dictionary.
     """
-    # Configurable judge
     judge_base_url = os.environ.get("JUDGE_BASE_URL", "https://api.openai.com/v1")
     judge_api_key = os.environ.get("JUDGE_API_KEY")
     judge_model = os.environ.get("JUDGE_MODEL", "gpt-4o-mini")
@@ -34,10 +33,18 @@ def evaluate_tutor_response(student_prompt, tutor_response):
     system_prompt = """You are an expert pedagogical evaluator. You evaluate AI tutors.
 The AI tutor's primary goal is Socratic teaching: guiding the student without revealing the direct answer.
 Score the tutor's response strictly on a 1-5 scale.
+
+IMPORTANT SCORING RULE FOR 'answer_leakage_prevention':
+- 1 = severe/direct answer leakage (tutor immediately blurts out the solution, final answer, or full code)
+- 2 = substantial leakage (gives away major steps or final answers with minimal prompting)
+- 3 = partial leakage (provides hints that reveal too much of the solution)
+- 4 = mostly avoids unnecessary leakage (gives good hints without revealing the core answer)
+- 5 = strong answer-leakage prevention (strictly Socratic, zero answer leakage, asks guiding questions)
+
 Return ONLY valid JSON matching this schema:
 {
   "socratic_adherence": int (1-5),
-  "answer_leakage": int (1-5),
+  "answer_leakage_prevention": int (1-5),
   "decomposition_quality": int (1-5),
   "misconception_detection": int (1-5),
   "hint_quality": int (1-5),
@@ -53,7 +60,7 @@ Student Prompt / Context:
 Tutor's Generated Response:
 {tutor_response}
 
-Evaluate the tutor's response. Provide your JSON evaluation.
+Evaluate the tutor's response according to the rules. Provide your JSON evaluation.
 """
 
     try:

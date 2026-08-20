@@ -15,3 +15,6 @@ training/datasets/processed/
 unsloth_compiled_cache/
 outputs/
 .agents/
+hf_staging/
+temp_adapter_test/
+temp_adapter_test_run.py

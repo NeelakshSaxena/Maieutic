@@ -52,7 +52,7 @@ class MonitorCallback(TrainerCallback):
 from dataset import load_and_format_dataset
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="MentorAI SFT Training")
+    parser = argparse.ArgumentParser(description="Maieutic SFT Training")
     parser.add_argument("--smoke-test", action="store_true", help="Run 10 steps for testing")
     parser.add_argument("--full-run", action="store_true", help="Run full training based on YAML")
     return parser.parse_args()

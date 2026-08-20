@@ -24,7 +24,7 @@ def generate_responses(model, tokenizer, benchmark_path):
         print(f"  Generating {i+1}/{len(samples)}...")
         messages = sample.get("messages", [])
         
-        system_msg = {"role": "system", "content": "You are MentorAI, an expert Socratic tutor. You must never give the student the direct answer. Instead, ask guiding questions, provide hints, and help them arrive at the answer themselves."}
+        system_msg = {"role": "system", "content": "You are Maieutic, an expert Socratic tutor. You must never give the student the direct answer. Instead, ask guiding questions, provide hints, and help them arrive at the answer themselves."}
         
         user_msg = next((m for m in messages if m["role"] == "user"), None)
         if not user_msg:
@@ -109,7 +109,7 @@ def main():
     
     tutoring_scores = {
         "socratic_adherence": [],
-        "answer_leakage": [],
+        "answer_leakage_prevention": [],
         "decomposition_quality": [],
         "misconception_detection": [],
         "hint_quality": [],
@@ -156,7 +156,7 @@ def main():
         return f"{score:.2f} / 5" if isinstance(score, float) else str(score)
         
     with open(report_path, "w", encoding="utf-8") as f:
-        f.write(f"# MentorAI Phase 2 Evaluation Report\n\n")
+        f.write(f"# Maieutic Phase 2 Evaluation Report\n\n")
         f.write(f"**Run:** {run_name}\n")
         f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         
@@ -165,7 +165,7 @@ def main():
         f.write("| :--- | :---: |\n")
         f.write(f"| Socratic Adherence | {format_score(avg_tutoring['socratic_adherence'])} |\n")
         f.write(f"| Hint Quality | {format_score(avg_tutoring['hint_quality'])} |\n")
-        f.write(f"| Answer Leakage | {format_score(avg_tutoring['answer_leakage'])} |\n")
+        f.write(f"| Answer Leakage Prevention | {format_score(avg_tutoring['answer_leakage_prevention'])} |\n")
         f.write(f"| Decomposition | {format_score(avg_tutoring['decomposition_quality'])} |\n")
         f.write(f"| Misconception Detection | {format_score(avg_tutoring['misconception_detection'])} |\n")
         f.write(f"| Correctness | {format_score(avg_tutoring['correctness'])} |\n")

@@ -66,10 +66,10 @@ def load_and_format_dataset(file_paths=None, tokenizer=None, max_samples=None):
     for sample in samples:
         messages = sample.get("messages", [])
         
-        # Inject MentorAI Socratic tutor system message
+        # Inject Maieutic Socratic tutor system message
         system_message = {
             "role": "system", 
-            "content": "You are MentorAI, an expert Socratic tutor. You must never give the student the direct answer. Instead, ask guiding questions, provide hints, and help them arrive at the answer themselves."
+            "content": "You are Maieutic, an expert Socratic tutor. You must never give the student the direct answer. Instead, ask guiding questions, provide hints, and help them arrive at the answer themselves."
         }
         
         if not any(m.get("role") == "system" for m in messages):
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     if len(ds) > 0:
         print("Sample 0 text preview:\n")
         print(ds[0]["text"][:500] + "...\n")
-        assert "You are MentorAI" in ds[0]["text"], "System prompt missing!"
+        assert "You are Maieutic" in ds[0]["text"], "System prompt missing!"
         print("[SUCCESS] Dataset formatting passed smoke test.")
     else:
         print("[INFO] No dataset files available on local disk or HF Hub.")

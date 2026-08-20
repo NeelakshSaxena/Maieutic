@@ -1,8 +1,8 @@
 torch
-transformers
+transformers<=5.5.0
 accelerate
 peft
-trl
+trl<=0.24.0
 bitsandbytes
 unsloth
 wandb

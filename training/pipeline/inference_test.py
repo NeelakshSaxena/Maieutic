@@ -20,7 +20,7 @@ def main():
     
     tokenizer = get_chat_template(
         tokenizer,
-        chat_template = "qwen-2.5",
+        chat_template = "qwen-3",
     )
     
     FastLanguageModel.for_inference(model)

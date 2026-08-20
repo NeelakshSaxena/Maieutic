@@ -7,6 +7,9 @@ from trl import SFTTrainer
 from transformers import TrainingArguments
 from unsloth.chat_templates import get_chat_template
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from dataset import load_and_format_dataset
 
 def parse_args():
@@ -38,7 +41,7 @@ def main():
     # Configure Qwen Chat template
     tokenizer = get_chat_template(
         tokenizer,
-        chat_template = "qwen-2.5",
+        chat_template = "qwen-3",
     )
 
     print("Setting up LoRA adapters...")

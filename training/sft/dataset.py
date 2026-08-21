@@ -75,16 +75,10 @@ def load_and_format_dataset(file_paths=None, tokenizer=None, max_samples=None):
         if not any(m.get("role") == "system" for m in messages):
             messages.insert(0, system_message)
             
-        if tokenizer and hasattr(tokenizer, "apply_chat_template"):
-            try:
-                text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
-                formatted_data["text"].append(text)
-            except Exception:
-                text = "".join([chatml_template.format(role=m["role"], content=m["content"]) for m in messages])
-                formatted_data["text"].append(text)
-        else:
-            text = "".join([chatml_template.format(role=m["role"], content=m["content"]) for m in messages])
-            formatted_data["text"].append(text)
+        # We manually format using ChatML to bypass Qwen3's broken chat_template
+        # which automatically injects empty <think> tags if reasoning_content is missing.
+        text = "".join([chatml_template.format(role=m["role"], content=m["content"]) for m in messages])
+        formatted_data["text"].append(text)
 
     return Dataset.from_dict(formatted_data)
 

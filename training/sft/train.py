@@ -123,6 +123,10 @@ def main():
     
     report_to = "wandb" if (args.full_run and "WANDB_API_KEY" in os.environ) else "none"
 
+    from completion_collator import DataCollatorForCompletionOnlyLM
+    response_template = "<|im_start|>assistant\n"
+    collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
+
     print("Setting up Trainer...")
     trainer = SFTTrainer(
         model = model,
@@ -133,6 +137,7 @@ def main():
         max_seq_length = config["max_seq_length"],
         dataset_num_proc = 2,
         packing = False, # Can be True for faster training
+        data_collator = collator,
         args = TrainingArguments(
             per_device_train_batch_size = config["per_device_train_batch_size"],
             gradient_accumulation_steps = config["gradient_accumulation_steps"],

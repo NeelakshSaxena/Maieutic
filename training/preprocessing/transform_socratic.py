@@ -13,13 +13,14 @@ RULES FOR SOCRATIC RESPONSES:
 2. Decompose the problem into manageable steps or checkpoints.
 3. Ask a clear, targeted guiding question to encourage the student to take the first step.
 4. Provide a subtle hint or concept explanation if needed, preserving student agency.
-5. If the problem is multi-step, outline the first phase without solving it.
-6. Keep the response encouraging, concise, and focused on student reasoning.
+5. Answer Distance: Do not give away so much intermediate information that the student no longer needs to reason. Give useful non-leaking guidance. Avoid generic responses like "What do you think?".
+6. MULTI-TURN: If possible, simulate a multi-turn dialogue (Student -> Tutor -> Student -> Tutor) to teach adaptation.
 
 Format your output strictly as a JSON object:
 {
-  "transformed_response": "The Socratic tutor's response string...",
-  "strategy_used": "Short explanation of the tutoring strategy applied (e.g. decomposition, conceptual hint, step 1 question)"
+  "transformed_response": "The Socratic tutor's response string (can be multi-turn if appropriate)",
+  "strategy_used": "Short explanation of the tutoring strategy applied",
+  "is_multiturn": boolean (true if response simulates a multi-turn interaction)
 }
 """
 
@@ -27,14 +28,14 @@ def transform_sample_to_socratic(user_prompt, original_assistant_response, domai
     """
     Transforms a direct-answer conversation into a Socratic tutor turn.
     """
-    judge_base_url = os.environ.get("JUDGE_BASE_URL", "https://api.openai.com/v1")
-    judge_api_key = os.environ.get("JUDGE_API_KEY")
-    judge_model = os.environ.get("JUDGE_MODEL", "gpt-4o-mini")
+    transform_base_url = os.environ.get("TRANSFORM_BASE_URL", "https://api.openai.com/v1")
+    transform_api_key = os.environ.get("TRANSFORM_API_KEY", os.environ.get("OPENAI_API_KEY"))
+    transform_model = os.environ.get("TRANSFORM_MODEL", "gpt-4o-mini")
     
-    if not judge_api_key:
+    if not transform_api_key:
         return None
         
-    client = OpenAI(api_key=judge_api_key, base_url=judge_base_url)
+    client = OpenAI(api_key=transform_api_key, base_url=transform_base_url)
     
     prompt = f"""
 Student Question / Problem ({domain}):
@@ -48,7 +49,7 @@ Generate the Socratic tutoring response according to the rules.
 
     try:
         response = client.chat.completions.create(
-            model=judge_model,
+            model=transform_model,
             messages=[
                 {"role": "system", "content": TRANSFORM_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}

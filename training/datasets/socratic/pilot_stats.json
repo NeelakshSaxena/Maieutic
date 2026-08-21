@@ -1,13 +1,18 @@
 {
-  "source_examples_examined": 346,
-  "transformed_accepted_examples": 300,
-  "rejected_examples": 46,
-  "rejection_rate_percent": 13.29,
-  "leakage_rate_percent": 0.0,
-  "correctness_rate_percent": 100.0,
-  "category_distribution": {
-    "math": 153,
-    "chat": 147
+  "total_pilot_samples": 0,
+  "type_distribution": {
+    "socratic": 0,
+    "reasoning_replay": 0
   },
-  "avg_token_length": 37.4
+  "category_distribution": {},
+  "socratic_stats": {
+    "source_examples_examined": 0,
+    "transformed_accepted_examples": 0,
+    "rejected_examples": 0,
+    "rejection_rate_percent": 0,
+    "leakage_rate_percent": 0,
+    "correctness_rate_percent": 0,
+    "multiturn_percent": 0,
+    "avg_token_length": 0
+  }
 }

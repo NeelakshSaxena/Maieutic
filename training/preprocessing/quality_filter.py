@@ -52,19 +52,33 @@ Transformed Tutor Response:
 Audit this transformed sample for training quality.
 """
 
-    try:
-        response = client.chat.completions.create(
-            model=judge_model,
-            messages=[
-                {"role": "system", "content": FILTER_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.0
-        )
-        eval_data = json.loads(response.choices[0].message.content)
-        is_accepted = eval_data.get("is_accepted", False)
-        return is_accepted, eval_data
-    except Exception as e:
-        print(f"Error during quality validation: {e}")
-        return False, {"rejection_reason": f"execution_error: {e}"}
+    import time
+    
+    max_retries = 1
+    base_wait = 2.0
+    
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model=judge_model,
+                messages=[
+                    {"role": "system", "content": FILTER_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.0,
+                timeout=90.0,
+                extra_body={"enable_reasoning": False}
+            )
+            eval_data = json.loads(response.choices[0].message.content)
+            is_accepted = eval_data.get("is_accepted", False)
+            return is_accepted, eval_data
+        except Exception as e:
+            if attempt < max_retries:
+                time.sleep(base_wait * (2 ** attempt))
+                continue
+            else:
+                if "timeout" in str(e).lower():
+                    return False, {"rejection_reason": "api_timeout"}
+                print(f"Error during quality validation: {e}")
+                return False, {"rejection_reason": f"execution_error: {e}"}

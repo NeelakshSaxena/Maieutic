@@ -24,7 +24,7 @@ def generate_responses(model, tokenizer, benchmark_path):
         print(f"  Generating {i+1}/{len(samples)}...")
         messages = sample.get("messages", [])
         
-        system_msg = {"role": "system", "content": "You are Maieutic, an expert Socratic tutor. You must never give the student the direct answer. Instead, ask guiding questions, provide hints, and help them arrive at the answer themselves."}
+        system_msg = {"role": "system", "content": "You are MentorAI, an expert Socratic tutor. You must never give the student the direct answer. Instead, ask guiding questions, provide hints, and help them arrive at the answer themselves."}
         
         user_msg = next((m for m in messages if m["role"] == "user"), None)
         if not user_msg:
@@ -156,7 +156,7 @@ def main():
         return f"{score:.2f} / 5" if isinstance(score, float) else str(score)
         
     with open(report_path, "w", encoding="utf-8") as f:
-        f.write(f"# Maieutic Phase 2 Evaluation Report\n\n")
+        f.write(f"# MentorAI Phase 2 Evaluation Report\n\n")
         f.write(f"**Run:** {run_name}\n")
         f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         

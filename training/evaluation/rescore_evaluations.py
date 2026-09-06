@@ -59,7 +59,7 @@ for run_key, run_name, gen_file, report_file, gsm8k, mmlu in runs:
         return f"{score:.2f} / 5" if isinstance(score, float) else str(score)
         
     with open(report_path, "w", encoding="utf-8") as f:
-        f.write(f"# Maieutic Phase 2 Evaluation Report\n\n")
+        f.write(f"# MentorAI Phase 2 Evaluation Report\n\n")
         f.write(f"**Run:** {run_name}\n")
         f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         f.write("## Metrics\n\n")

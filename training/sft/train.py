@@ -55,6 +55,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Maieutic SFT Training")
     parser.add_argument("--smoke-test", action="store_true", help="Run 10 steps for testing")
     parser.add_argument("--full-run", action="store_true", help="Run full training based on YAML")
+    parser.add_argument("--config", type=str, default="../configs/qlora_8b.yaml", help="Path to config YAML")
     return parser.parse_args()
 
 def main():
@@ -65,7 +66,7 @@ def main():
         args.smoke_test = True
 
     # Load config
-    config_path = os.path.join(os.path.dirname(__file__), "../configs/qlora_8b.yaml")
+    config_path = os.path.join(os.path.dirname(__file__), args.config)
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
@@ -99,10 +100,10 @@ def main():
 
     print("Loading dataset...")
     # Load dataset formatted with ChatML template and Socratic system prompts
-    dataset_paths = [
+    dataset_paths = config.get("dataset_paths", [
         "../datasets/processed/lmsys_processed.jsonl",
         "../datasets/processed/NuminaMath_processed.jsonl"
-    ]
+    ])
     # Filter for real execution
     dataset_paths = [os.path.join(os.path.dirname(__file__), p) for p in dataset_paths if os.path.exists(os.path.join(os.path.dirname(__file__), p))]
     

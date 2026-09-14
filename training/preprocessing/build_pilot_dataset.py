@@ -1,238 +1,237 @@
 import os
+import sys
+
+# Set Hugging Face cache to project root to avoid global cache clutter
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, "../.."))
+os.environ["HF_HOME"] = os.path.join(project_root, ".hf_cache")
+
 import json
 import random
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from transform_socratic import transform_sample_to_socratic
-from quality_filter import validate_socratic_sample
+from datasets import load_dataset
 
 SYSTEM_PROMPT = "You are Maieutic, an expert Socratic tutor. You must never give the student the direct answer. Instead, ask guiding questions, provide hints, and help them arrive at the answer themselves."
 
-TRANSFORM_CONCURRENCY = 4
-TRANSFORM_BATCH_SIZE = 8
-
-def process_replay(candidate):
-    messages = candidate.get("messages", [])
-    user_msg = next((m["content"] for m in messages if m["role"] == "user"), None)
-    asst_msg = next((m["content"] for m in messages if m["role"] == "assistant"), None)
-    domain = candidate.get("domain", "math")
-    
-    if not user_msg or not asst_msg:
-        return None
+def format_socrateach(item, idx):
+    # meric533/socrateach-sft already has standard 'messages' format
+    messages = item.get("messages", [])
+    if not messages and "dialogue" in item:
+        messages = item["dialogue"]
         
-    if "<think>" not in asst_msg:
-        asst_msg = f"<think>\nSolving the problem logically.\n</think>\n{asst_msg}"
+    final_messages = []
+    # Ensure system prompt is set to Maieutic
+    has_system = False
+    for m in messages:
+        if m.get("role") == "system":
+            final_messages.append({"role": "system", "content": SYSTEM_PROMPT})
+            has_system = True
+        else:
+            final_messages.append({"role": m.get("role", "user"), "content": m.get("content", "")})
+            
+    if not has_system:
+        final_messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
         
-    pilot_entry = {
-        "id": candidate.get("id"),
-        "source_dataset": candidate.get("source_dataset", "unknown"),
-        "domain": domain,
-        "type": "reasoning_replay",
-        "messages": [
-            {"role": "user", "content": user_msg},
-            {"role": "assistant", "content": asst_msg}
-        ],
+    return {
+        "id": f"socrateach_{idx}",
+        "source_dataset": "socrateach",
+        "domain": "math",
+        "type": "socratic",
+        "messages": final_messages,
         "metadata": {
-            "strategy_used": "reasoning_replay"
+            "strategy_used": "socratic",
+            "is_multiturn": len(final_messages) > 3
         }
     }
-    return pilot_entry
 
-def count_tokens(text):
-    return len(text.split())
-
-def do_transform(candidate):
-    cand_id = candidate.get("id", "unknown")
-    print(f"DEBUG: Starting transform for {cand_id}", flush=True)
-    messages = candidate.get("messages", [])
-    user_msg = next((m["content"] for m in messages if m["role"] == "user"), None)
-    asst_msg = next((m["content"] for m in messages if m["role"] == "assistant"), None)
-    domain = candidate.get("domain", "chat")
+def format_mathdial(item, idx):
+    # MathDial format
+    raw_dialogue = item.get("conversation", item.get("dialogue", item.get("conversations", item.get("turns", item.get("messages", [])))))
     
-    if not user_msg or not asst_msg:
-        return candidate, {"error": "missing_messages"}
-        
-    transform_data = transform_sample_to_socratic(user_msg, asst_msg, domain=domain)
-    print(f"DEBUG: Finished transform for {cand_id}", flush=True)
-    return candidate, transform_data
-
-def do_judge(candidate, transform_data):
-    cand_id = candidate.get("id", "unknown")
-    print(f"DEBUG: Starting judge for {cand_id}", flush=True)
-    messages = candidate.get("messages", [])
-    user_msg = next((m["content"] for m in messages if m["role"] == "user"), None)
-    transformed_messages = transform_data["messages"]
-    transformed_text = json.dumps(transformed_messages)
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     
-    is_accepted, eval_data = validate_socratic_sample(user_msg, transformed_text)
-    print(f"DEBUG: Finished judge for {cand_id}", flush=True)
-    return candidate, transform_data, is_accepted, eval_data
+    if isinstance(raw_dialogue, str):
+        # MathDial uses |EOM| delimiter
+        if "|EOM|" in raw_dialogue:
+            turns = raw_dialogue.split("|EOM|")
+            for turn in turns:
+                turn = turn.strip()
+                if not turn: continue
+                if turn.startswith("Teacher:"):
+                    messages.append({"role": "assistant", "content": turn[len("Teacher:"):].strip()})
+                elif turn.startswith("Student:"):
+                    messages.append({"role": "user", "content": turn[len("Student:"):].strip()})
+                else:
+                    role = "user" if len(messages) % 2 == 1 else "assistant"
+                    messages.append({"role": role, "content": turn})
+            raw_dialogue = [] # Done processing
+        else:
+            try:
+                raw_dialogue = json.loads(raw_dialogue)
+            except json.JSONDecodeError:
+                raw_dialogue = [raw_dialogue]
+                
+    # Fallback for other standard structures if it wasn't the |EOM| string
+    for turn in raw_dialogue:
+        if isinstance(turn, dict):
+            role = turn.get("speaker", turn.get("role", "unknown"))
+            # normalize roles
+            if role.lower() in ["teacher", "tutor", "assistant"]:
+                role = "assistant"
+            elif role.lower() in ["student", "user"]:
+                role = "user"
+            content = turn.get("text", turn.get("content", turn.get("utterance", "")))
+            messages.append({"role": role, "content": content})
+        elif isinstance(turn, str):
+             # If it's just strings, alternate user/assistant
+             role = "user" if len(messages) % 2 == 1 else "assistant"
+             messages.append({"role": role, "content": turn})
+
+    return {
+        "id": f"mathdial_{item.get('qid', idx)}",
+        "source_dataset": "mathdial",
+        "domain": "math",
+        "type": "socratic",
+        "messages": messages,
+        "metadata": {
+            "strategy_used": "probing_focus",
+            "scenario": item.get("scenario", ""),
+            "is_multiturn": len(messages) > 3
+        }
+    }
+
+
 
 def main():
-    socratic_dir = "/workspace/Maieutic/training/datasets/socratic"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, "../.."))
+    socratic_dir = os.path.join(project_root, "training", "datasets", "socratic")
     os.makedirs(socratic_dir, exist_ok=True)
     
-    pilot_file = os.path.join(socratic_dir, "socratic_pilot.jsonl")
-    rejections_file = os.path.join(socratic_dir, "rejections.jsonl")
-    stats_file = os.path.join(socratic_dir, "pilot_stats.json")
-    live_log = os.path.join(socratic_dir, "live_generation.log")
+    pilot_file = os.path.join(socratic_dir, "socratic_pilot_v1_5.jsonl")
     
-    # Load already processed IDs to avoid duplicate work
-    processed_ids = set()
-    if os.path.exists(pilot_file):
-        with open(pilot_file, "r", encoding="utf-8") as f:
-            for line in f:
-                processed_ids.add(json.loads(line).get("id"))
-    if os.path.exists(rejections_file):
-        with open(rejections_file, "r", encoding="utf-8") as f:
-            for line in f:
-                processed_ids.add(json.loads(line).get("id"))
-                
-    sources = [
-        ("/workspace/Maieutic/training/datasets/processed/lmsys_processed.jsonl", "chat"),
-        ("/workspace/Maieutic/training/datasets/processed/NuminaMath_processed.jsonl", "math")
-    ]
+    print("--- Phase 1.5 Real-Data Dataset Builder ---")
     
-    raw_samples = []
-    for path, domain in sources:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    item = json.loads(line)
-                    item["domain"] = domain
-                    if item.get("id") not in processed_ids:
-                        raw_samples.append(item)
-                    
-    print(f"Loaded existing processing state. Remaining unprocessed samples: {len(raw_samples)}")
+    final_dataset = []
     
-    target_socratic = 50
-    target_replay = 0
-    
-    random.seed(42)
-    random.shuffle(raw_samples)
-    
-    # Try to load existing stats to keep numbers accurate if resuming
-    stats = {"total_pilot_samples": 0, "type_distribution": {"socratic": 0, "reasoning_replay": 0}, "category_distribution": {}, "socratic_stats": {"source_examples_examined": 0, "transformed_accepted_examples": 0, "rejected_examples": 0}}
-    token_lengths = []
-    leakage_count = 0
-    correctness_count = 0
-    multiturn_count = 0
-    
-    if os.path.exists(stats_file):
-        try:
-            with open(stats_file, "r", encoding="utf-8") as f:
-                old_stats = json.load(f)
-                stats["type_distribution"]["socratic"] = old_stats.get("type_distribution", {}).get("socratic", 0)
-                stats["socratic_stats"]["rejected_examples"] = old_stats.get("socratic_stats", {}).get("rejected_examples", 0)
-                stats["socratic_stats"]["source_examples_examined"] = old_stats.get("socratic_stats", {}).get("source_examples_examined", 0)
-        except:
-            pass
+    # 1. Load SocraTeach (~7,500 examples)
+    print("Loading SocraTeach-SFT (meric533/socrateach-sft)...")
+    try:
+        ds_socra = load_dataset("meric533/socrateach-sft", split="train", streaming=True)
+        count = 0
+        for item in ds_socra:
+            if count >= 7500:
+                break
+            formatted = format_socrateach(item, count)
+            # Only keep Socratic ones (not replay)
+            if len(formatted["messages"]) > 2: 
+                final_dataset.append(formatted)
+                count += 1
+        print(f"Loaded {count} SocraTeach examples.")
+    except Exception as e:
+        print(f"Failed to load SocraTeach: {e}")
 
-    print(f"\nBuilding Reasoning Replay (Target: {target_replay})...")
-    
-    with open(live_log, "a", encoding="utf-8") as lf:
-        lf.write(f"--- RESUMING PILOT GENERATION LOG (Current Accepted: {stats['type_distribution']['socratic']}) ---\n")
+    # 2. Load MathDial (~2,500 examples)
+    print("Loading MathDial (eth-nlped/mathdial)...")
+    try:
+        ds_mathdial = load_dataset("eth-nlped/mathdial", split="train", streaming=True)
+        count = 0
+        for item in ds_mathdial:
+            if count >= 2500:
+                break
+            formatted = format_mathdial(item, count)
+            if len(formatted["messages"]) > 2:
+                final_dataset.append(formatted)
+                count += 1
+        print(f"Loaded {count} MathDial examples.")
+    except Exception as e:
+        print(f"Failed to load MathDial: {e}")
 
-    print(f"\nBuilding Socratic (Target: {target_socratic})...", flush=True)
-    socratic_candidates = [s for s in raw_samples if s["domain"] == "chat"]
-    
-    cand_index = 0
-    batch_size = TRANSFORM_BATCH_SIZE
-    
-    while stats["type_distribution"]["socratic"] < target_socratic and cand_index < len(socratic_candidates):
-        batch = socratic_candidates[cand_index:cand_index+batch_size]
-        cand_index += batch_size
-        
-        # PHASE 1: Parallel Transform
-        transform_results = []
-        with ThreadPoolExecutor(max_workers=TRANSFORM_CONCURRENCY) as executor:
-            future_to_cand = {executor.submit(do_transform, cand): cand for cand in batch}
-            for future in as_completed(future_to_cand):
-                cand, t_data = future.result()
-                stats["socratic_stats"]["source_examples_examined"] += 1
-                if "error" in t_data:
-                    reason = t_data["error"]
-                    with open(rejections_file, "a", encoding="utf-8") as rf:
-                        rf.write(json.dumps({"id": cand.get("id"), "rejection_reason": reason, "raw": t_data.get("raw")}) + "\n")
-                    stats["socratic_stats"]["rejected_examples"] += 1
-                    msg = f"  Rejected sample ({reason}) Total rejections: {stats['socratic_stats']['rejected_examples']}"
-                    print(msg, flush=True)
-                    with open(live_log, "a", encoding="utf-8") as lf:
-                        lf.write(msg + "\n")
-                else:
-                    transform_results.append((cand, t_data))
-                    
-        # PHASE 2: Parallel Judge
-        if not transform_results:
-            continue
+    # 3. Load Eedi (2,000 examples)
+    print("Loading Eedi (Eedi/Question-Anchored-Tutoring-Dialogues-2k)...")
+    try:
+        ds_eedi = load_dataset("Eedi/Question-Anchored-Tutoring-Dialogues-2k", "anchored-dialogues", split="train", streaming=True)
+        eedi_convos = {}
+        for item in ds_eedi:
+            iid = item.get("InterventionId")
+            if not iid: continue
+            if iid not in eedi_convos:
+                eedi_convos[iid] = []
             
-        with ThreadPoolExecutor(max_workers=TRANSFORM_CONCURRENCY) as executor:
-            future_to_res = {executor.submit(do_judge, cand, t_data): (cand, t_data) for cand, t_data in transform_results}
-            for future in as_completed(future_to_res):
-                if stats["type_distribution"]["socratic"] >= target_socratic:
-                    continue # Stop saving if target reached
-                    
-                cand, t_data, is_accepted, eval_data = future.result()
-                if is_accepted:
-                    domain = cand.get("domain", "chat")
-                    final_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + t_data["messages"]
-                    pilot_entry = {
-                        "id": cand.get("id"),
-                        "source_dataset": cand.get("source_dataset", "unknown"),
-                        "domain": domain,
-                        "type": "socratic",
-                        "messages": final_messages,
-                        "metadata": {
-                            "strategy_used": t_data.get("strategy_used"),
-                            "socratic_score": eval_data.get("socratic_score", 5),
-                            "is_multiturn": t_data.get("is_multiturn", False)
-                        }
+            eedi_convos[iid].append({
+                "role": "assistant" if item.get("IsTutor") else "user",
+                "content": item.get("MessageString", ""),
+                "seq": item.get("MessageSequence", 0)
+            })
+            
+        count = 0
+        for iid, msgs in eedi_convos.items():
+            if count >= 2000:
+                break
+            
+            # Sort messages by sequence correctly
+            msgs.sort(key=lambda x: x["seq"])
+            
+            final_msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+            for m in msgs:
+                final_msgs.append({"role": m["role"], "content": m["content"]})
+                
+            if len(final_msgs) > 3: # at least system + 3 turns
+                final_dataset.append({
+                    "id": f"eedi_{iid}",
+                    "source_dataset": "eedi",
+                    "domain": "math",
+                    "type": "socratic",
+                    "messages": final_msgs,
+                    "metadata": {
+                        "strategy_used": "talk_moves",
+                        "is_multiturn": True
                     }
-                    with open(pilot_file, "a", encoding="utf-8") as pf:
-                        pf.write(json.dumps(pilot_entry) + "\n")
-                    
-                    stats["type_distribution"]["socratic"] += 1
-                    stats["socratic_stats"]["transformed_accepted_examples"] += 1
-                    
-                    asst_text = " ".join([m["content"] for m in pilot_entry["messages"] if m["role"] == "assistant"])
-                    token_lengths.append(count_tokens(asst_text))
-                    
-                    if eval_data.get("has_answer_leakage", False):
-                        leakage_count += 1
-                    if eval_data.get("is_correct", True):
-                        correctness_count += 1
-                    if pilot_entry["metadata"].get("is_multiturn", False):
-                        multiturn_count += 1
-                        
-                    msg = f"  Accepted {stats['type_distribution']['socratic']}/{target_socratic} Socratic samples..."
-                    print(msg, flush=True)
-                    with open(live_log, "a", encoding="utf-8") as lf:
-                        lf.write(msg + "\n")
-                else:
-                    reason = eval_data.get("rejection_reason", "unknown")
-                    with open(rejections_file, "a", encoding="utf-8") as rf:
-                        rf.write(json.dumps({"id": cand.get("id"), "rejection_reason": reason, "raw": eval_data.get("raw")}) + "\n")
-                    stats["socratic_stats"]["rejected_examples"] += 1
-                    msg = f"  Rejected sample ({reason}) Total rejections: {stats['socratic_stats']['rejected_examples']}"
-                    print(msg, flush=True)
-                    with open(live_log, "a", encoding="utf-8") as lf:
-                        lf.write(msg + "\n")
-                        
-    # Save final stats
-    stats["total_pilot_samples"] = stats["type_distribution"]["socratic"] + stats["type_distribution"]["reasoning_replay"]
-    total_accepted = stats["socratic_stats"]["transformed_accepted_examples"]
-    if total_accepted > 0:
-        stats["socratic_stats"]["rejection_rate_percent"] = round((stats["socratic_stats"]["rejected_examples"] / stats["socratic_stats"]["source_examples_examined"] * 100), 2) if stats["socratic_stats"]["source_examples_examined"] > 0 else 0
-        stats["socratic_stats"]["leakage_rate_percent"] = round((leakage_count / total_accepted * 100), 2)
-        stats["socratic_stats"]["correctness_rate_percent"] = round((correctness_count / total_accepted * 100), 2)
-        stats["socratic_stats"]["multiturn_percent"] = round((multiturn_count / total_accepted * 100), 2)
-        stats["socratic_stats"]["avg_token_length"] = round(sum(token_lengths) / len(token_lengths), 1) if token_lengths else 0
+                })
+                count += 1
+        print(f"Loaded {count} Eedi examples.")
+    except Exception as e:
+        print(f"Failed to load Eedi: {e}")
 
-    with open(stats_file, "w", encoding="utf-8") as f:
-        json.dump(stats, f, indent=2)
-        
-    print("\n--- PHASE 1.5 PILOT DATASET COMPLETE ---")
-    print(json.dumps(stats, indent=2))
-    print(f"Saved pilot dataset to {pilot_file}")
+    # 4. Load General/Reasoning Replay (to achieve 75/25 split)
+    print("Loading General Reasoning Replay...")
+    target_replay = len(final_dataset) // 3  # If tutoring is 75%, general is 25%. So general = tutoring / 3.
+    general_path = os.path.join(project_root, "training", "datasets", "processed", "lmsys_processed.jsonl")
+    replay_count = 0
+    if os.path.exists(general_path):
+        with open(general_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            random.shuffle(lines)
+            for line in lines:
+                if replay_count >= target_replay:
+                    break
+                item = json.loads(line)
+                messages = item.get("messages", [])
+                
+                # Check for valid messages and length
+                if len(messages) >= 2 and any(m["role"] == "assistant" for m in messages):
+                    final_dataset.append({
+                        "id": item.get("id", f"replay_{replay_count}"),
+                        "source_dataset": "lmsys",
+                        "domain": "chat",
+                        "type": "reasoning_replay",
+                        "messages": [{"role": "system", "content": "You are a helpful assistant."}] + messages,
+                        "metadata": {"strategy_used": "reasoning_replay"}
+                    })
+                    replay_count += 1
+        print(f"Loaded {replay_count} General Reasoning Replay examples.")
+    else:
+        print(f"General reasoning dataset not found at {general_path}")
+
+    # Shuffle dataset
+    random.shuffle(final_dataset)
+
+    # Save to file
+    with open(pilot_file, "w", encoding="utf-8") as f:
+        for item in final_dataset:
+            f.write(json.dumps(item) + "\n")
+            
+    print(f"\nPhase 1.5 dataset built with {len(final_dataset)} examples.")
+    print(f"Saved to: {pilot_file}")
 
 if __name__ == "__main__":
     main()

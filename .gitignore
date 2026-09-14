@@ -18,3 +18,8 @@ outputs/
 hf_staging/
 temp_adapter_test/
 temp_adapter_test_run.py
+
+.hf_cache/
+
+envvv
+.env

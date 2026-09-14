@@ -1,7 +1,7 @@
 # MentorAI Phase 2 Evaluation Report
 
 **Run:** SFT QWEN3-8B
-**Date:** 2026-09-14 13:22:54
+**Date:** 2026-09-14 13:24:58
 
 ## Metrics
 

@@ -22,10 +22,10 @@ def run_capability_benchmark(model_path, is_base_model=False):
         # But wait, inference_test.py merged them or loaded them natively.
         # lm-eval supports peft via `pretrained=base_model,peft=model_path`
         if is_base_model:
-            model_args = f"pretrained={model_path}"
+            model_args = f"pretrained={model_path},load_in_4bit=True"
         else:
             # We assume model_path is the peft adapter and the base model is Qwen/Qwen3-8B
-            model_args = f"pretrained=Qwen/Qwen3-8B,peft={model_path},dtype=bfloat16"
+            model_args = f"pretrained=Qwen/Qwen3-8B,peft={model_path},load_in_4bit=True"
             
         cmd = [
             "lm_eval",
@@ -34,7 +34,7 @@ def run_capability_benchmark(model_path, is_base_model=False):
             "--tasks", tasks,
             "--limit", str(limit),
             "--device", "cuda:0",
-            "--batch_size", "4",
+            "--batch_size", "2",
             "--output_path", tmpdir
         ]
         

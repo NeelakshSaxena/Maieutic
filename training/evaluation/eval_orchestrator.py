@@ -117,30 +117,42 @@ def main():
     }
     
     evaluated_generations = []
+    out_jsonl = os.path.join(eval_dir, f"raw_eval_{'base' if args.is_base else 'sft'}.jsonl")
     
-    for i, gen in enumerate(generations):
-        print(f"  Judging {i+1}/{len(generations)}...")
-        eval_json = evaluate_tutor_response(gen["prompt"], gen["generated_response"])
-        
-        if eval_json:
-            for k in tutoring_scores.keys():
-                if k in eval_json:
-                    tutoring_scores[k].append(eval_json[k])
-            gen["evaluation"] = eval_json
-        else:
-            gen["evaluation"] = None
+    if os.path.exists(out_jsonl) and sum(1 for _ in open(out_jsonl, "r", encoding="utf-8")) == 100:
+        print(f"Loading previously judged responses from {out_jsonl}")
+        with open(out_jsonl, "r", encoding="utf-8") as f:
+            for line in f:
+                gen = json.loads(line)
+                evaluated_generations.append(gen)
+                eval_json = gen.get("evaluation")
+                if eval_json:
+                    for k in tutoring_scores.keys():
+                        if k in eval_json:
+                            tutoring_scores[k].append(eval_json[k])
+    else:
+        for i, gen in enumerate(generations):
+            print(f"  Judging {i+1}/{len(generations)}...")
+            eval_json = evaluate_tutor_response(gen["prompt"], gen["generated_response"])
             
-        evaluated_generations.append(gen)
-        
+            if eval_json:
+                for k in tutoring_scores.keys():
+                    if k in eval_json:
+                        tutoring_scores[k].append(eval_json[k])
+                gen["evaluation"] = eval_json
+            else:
+                gen["evaluation"] = None
+                
+            evaluated_generations.append(gen)
+            
+        # Save raw outputs
+        with open(out_jsonl, "w", encoding="utf-8") as f:
+            for g in evaluated_generations:
+                f.write(json.dumps(g) + "\n")
+        print(f"\nRaw generated responses and judge scores saved to {out_jsonl}")
+
     # Calculate averages, handling N/A properly
     avg_tutoring = {k: (sum(v)/len(v) if len(v) > 0 else "N/A") for k, v in tutoring_scores.items()}
-    
-    # Save raw outputs
-    out_jsonl = os.path.join(eval_dir, f"raw_eval_{'base' if args.is_base else 'sft'}.jsonl")
-    with open(out_jsonl, "w", encoding="utf-8") as f:
-        for g in evaluated_generations:
-            f.write(json.dumps(g) + "\n")
-    print(f"\nRaw generated responses and judge scores saved to {out_jsonl}")
     
     # 3. Run Capability Benchmarks (GSM8K, MMLU)
     print("\nRunning Capability Benchmarks...")

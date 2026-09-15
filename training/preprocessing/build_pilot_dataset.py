@@ -61,7 +61,14 @@ def format_mathdial(item, idx):
                 elif turn.startswith("Student:"):
                     messages.append({"role": "user", "content": turn[len("Student:"):].strip()})
                 else:
-                    role = "user" if len(messages) % 2 == 1 else "assistant"
+                    # Strict alternation based on previous role
+                    last_role = messages[-1]["role"]
+                    role = "user" if last_role in ["system", "assistant"] else "assistant"
+                    
+                    # MathDial often prepends the student's name (e.g., 'Steven: '). We'll strip it if it exists.
+                    if ":" in turn[:20]:
+                        turn = turn.split(":", 1)[1].strip()
+                        
                     messages.append({"role": role, "content": turn})
             raw_dialogue = [] # Done processing
         else:
@@ -82,16 +89,40 @@ def format_mathdial(item, idx):
             content = turn.get("text", turn.get("content", turn.get("utterance", "")))
             messages.append({"role": role, "content": content})
         elif isinstance(turn, str):
-             # If it's just strings, alternate user/assistant
-             role = "user" if len(messages) % 2 == 1 else "assistant"
+             # If it's just strings, alternate user/assistant based on previous role
+             last_role = messages[-1]["role"]
+             role = "user" if last_role in ["system", "assistant"] else "assistant"
+             
+             if ":" in turn[:20]:
+                 turn = turn.split(":", 1)[1].strip()
+                 
              messages.append({"role": role, "content": turn})
+
+    # MathDial specific normalizations
+    norm_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for msg in messages[1:]:
+        role = msg["role"]
+        content = msg["content"].strip()
+        
+        # 1. Remove empty messages (e.g. "(focus)")
+        if not content or content in ["(focus)", "(generic)", "(probing)", "(telling)"]:
+            continue
+            
+        # 2 & 3. Remove exact duplicate adjacent AND merge remaining consecutive
+        if norm_messages[-1]["role"] == role:
+            if norm_messages[-1]["content"].strip() == content:
+                continue # Skip exact duplicate
+            else:
+                norm_messages[-1]["content"] += "\n" + content
+        else:
+            norm_messages.append({"role": role, "content": content})
 
     return {
         "id": f"mathdial_{item.get('qid', idx)}",
         "source_dataset": "mathdial",
         "domain": "math",
         "type": "socratic",
-        "messages": messages,
+        "messages": norm_messages,
         "metadata": {
             "strategy_used": "probing_focus",
             "scenario": item.get("scenario", ""),
@@ -101,13 +132,43 @@ def format_mathdial(item, idx):
 
 
 
+def format_lmsys(item, idx):
+    messages = []
+    # LMSYS format: list of dicts with role and content
+    for msg in item.get("conversation", []):
+        role = msg.get("role", "")
+        if role in ["human", "user"]:
+            role = "user"
+        elif role in ["assistant", "gpt", "model"]:
+            role = "assistant"
+        else:
+            role = "system"
+        messages.append({"role": role, "content": msg.get("content", "")})
+    
+    # Prepend system prompt
+    final_messages = [{"role": "system", "content": "You are a helpful assistant."}]
+    final_messages.extend(messages)
+    
+    return {
+        "id": f"lmsys_{item.get('conversation_id', idx)}",
+        "source_dataset": "lmsys",
+        "domain": "chat",
+        "type": "reasoning_replay",
+        "messages": final_messages,
+        "metadata": {
+            "strategy_used": "reasoning_replay",
+            "is_multiturn": len(final_messages) > 3
+        }
+    }
+
+
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(script_dir, "../.."))
     socratic_dir = os.path.join(project_root, "training", "datasets", "socratic")
     os.makedirs(socratic_dir, exist_ok=True)
     
-    pilot_file = os.path.join(socratic_dir, "socratic_pilot_v1_5.jsonl")
+    pilot_file = os.path.join(socratic_dir, "socratic_phase1_5_v2.jsonl")
     
     print("--- Phase 1.5 Real-Data Dataset Builder ---")
     
@@ -173,7 +234,11 @@ def main():
             
             final_msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
             for m in msgs:
-                final_msgs.append({"role": m["role"], "content": m["content"]})
+                if final_msgs[-1]["role"] == m["role"]:
+                    # Merge consecutive same-role messages
+                    final_msgs[-1]["content"] += "\n" + m["content"]
+                else:
+                    final_msgs.append({"role": m["role"], "content": m["content"]})
                 
             if len(final_msgs) > 3: # at least system + 3 turns
                 final_dataset.append({
@@ -195,32 +260,34 @@ def main():
     # 4. Load General/Reasoning Replay (to achieve 75/25 split)
     print("Loading General Reasoning Replay...")
     target_replay = len(final_dataset) // 3  # If tutoring is 75%, general is 25%. So general = tutoring / 3.
-    general_path = os.path.join(project_root, "training", "datasets", "processed", "lmsys_processed.jsonl")
-    replay_count = 0
-    if os.path.exists(general_path):
-        with open(general_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            random.shuffle(lines)
-            for line in lines:
-                if replay_count >= target_replay:
-                    break
-                item = json.loads(line)
-                messages = item.get("messages", [])
+    
+    # Direct LMSYS streaming for reconstruction (replaces old processed file dependency temporarily)
+    print("Loading lmsys-chat-1m (streaming fallback)...")
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        hf_token = os.environ.get("HF_TOKEN")
+        
+        # Pass split directly without filtering by language to keep it simple, or filter for English
+        ds_lmsys = load_dataset("lmsys/lmsys-chat-1m", split="train", streaming=True, token=hf_token)
+        replay_count = 0
+        for item in ds_lmsys:
+            # Simple language filter if available (often LMSYS has a 'language' column)
+            if item.get("language") and item.get("language") != "English":
+                continue
                 
-                # Check for valid messages and length
-                if len(messages) >= 2 and any(m["role"] == "assistant" for m in messages):
-                    final_dataset.append({
-                        "id": item.get("id", f"replay_{replay_count}"),
-                        "source_dataset": "lmsys",
-                        "domain": "chat",
-                        "type": "reasoning_replay",
-                        "messages": [{"role": "system", "content": "You are a helpful assistant."}] + messages,
-                        "metadata": {"strategy_used": "reasoning_replay"}
-                    })
-                    replay_count += 1
+            if replay_count >= target_replay:
+                break
+            
+            formatted = format_lmsys(item, replay_count)
+            # Ensure it has an assistant response
+            if any(m["role"] == "assistant" for m in formatted["messages"]):
+                final_dataset.append(formatted)
+                replay_count += 1
+                
         print(f"Loaded {replay_count} General Reasoning Replay examples.")
-    else:
-        print(f"General reasoning dataset not found at {general_path}")
+    except Exception as e:
+        print(f"Failed to load LMSYS streaming: {e}")
 
     # Shuffle dataset
     random.shuffle(final_dataset)

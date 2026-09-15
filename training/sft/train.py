@@ -55,6 +55,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Maieutic SFT Training")
     parser.add_argument("--smoke-test", action="store_true", help="Run 10 steps for testing")
     parser.add_argument("--full-run", action="store_true", help="Run full training based on YAML")
+    parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
     parser.add_argument("--config", type=str, default="../configs/qlora_8b.yaml", help="Path to config YAML")
     return parser.parse_args()
 
@@ -161,7 +162,7 @@ def main():
     )
 
     print(f"Starting training ({'SMOKE TEST' if args.smoke_test else 'FULL RUN'})...")
-    trainer_stats = trainer.train()
+    trainer_stats = trainer.train(resume_from_checkpoint=args.resume)
 
     print(f"Saving final adapter to {config['output_dir']}...")
     model.save_pretrained(config["output_dir"])

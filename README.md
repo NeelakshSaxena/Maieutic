@@ -1,49 +1,101 @@
-# Maieutic Documentation
+---
+license: mit
+base_model: Qwen/Qwen3-8B
+tags:
+- lora
+- socratic-tutor
+- mentorai
+---
 
-Welcome to **Maieutic**, the open-source Socratic tutoring agent project (formerly MentorAI). 
+# MentorAI: Socratic Tutoring Model Card
 
-Maieutic aims to fine-tune large language models (specifically Qwen3-8B) to guide students through Socratic dialogue rather than giving direct answers.
+This is the repository containing the QLoRA adapter for **MentorAI Experiment #1**.
+
+* **BASE MODEL:** `Qwen/Qwen3-8B`
+* **EXPERIMENT:** `experiment_01_contradictory_socratic_supervision`
+* **TRAINING TYPE:** QLoRA
+* **EPOCHS:** 1
+* **STEPS:** 2586
+* **MAX SEQUENCE LENGTH:** 4096
+* **GPU:** RTX 4090 24GB
 
 ---
 
-## 30-Second Project Status
+## How to Restore MentorAI
 
-* **Current Phase:** **Phase 2 (Fine-tuning & Evaluation)** - Currently working on **Phase 1.5 Socratic Target Transformation**.
-* **Latest Run:** `experiment_01_contradictory_socratic_supervision` completed (FROZEN due to contradictory direct-answer target data).
-* **Next SFT Experiment:** `Experiment #2` (FROZEN pending data transformation, reasoning token fix, and baseline evaluation rescoring).
-* **Private Backup:** `NeelakshSaxena/mentorai` on Hugging Face (contains Experiment #1 adapter, tokenizer, and evaluation reports).
-* **Full Status Report:** See [docs/PROJECT_STATUS.md](file:///workspace/Maieutic/docs/PROJECT_STATUS.md).
+This single private Hugging Face repository holds all model and training artifacts for the MentorAI project. Use the instructions below to resume work.
 
----
+### Artifact Locations
+* **LoRA Adapter & Tokenizer files:** Located at the root of this repository:
+  * `adapter_config.json`
+  * `adapter_model.safetensors`
+  * `chat_template.jinja`
+  * `tokenizer.json`
+  * `tokenizer_config.json`
+* **Evaluation Benchmark & Reports:** Located in `/evaluation/`:
+  * `mentorai_benchmark.jsonl` (evaluation benchmark)
+  * `report_base.md` / `report_sft.md` (rescoring reports)
+  * `generated_responses_base.jsonl` / `generated_responses_sft.jsonl` (raw outputs)
+* **Phase 1.5 Pilot Dataset:** Located in `/pilot/`:
+  * `socratic_pilot.jsonl` (transformed Socratic dataset)
+  * `rejections.jsonl` (audit trail of rejected examples)
+  * `pilot_stats.json` (quality metrics and categorization)
 
-## Documentation Index
+### Necessary vs Optional Downloads
+* **Necessary (to load model):** Root-level files (`adapter_config.json`, `adapter_model.safetensors`, tokenizer files).
+* **Optional (for replication/analysis):** `evaluation/` and `pilot/` subdirectories.
 
-### Core Technical Documents
-* [PRD](file:///workspace/Maieutic/docs/prd.md) — Product requirements and MVP scope.
-* [System Architecture](file:///workspace/Maieutic/docs/system_architecture.md) — Overall system structure.
-* [AI Architecture](file:///workspace/Maieutic/docs/ai_architecture.md) — AI agents and model architecture.
-* [Student Brain](file:///workspace/Maieutic/docs/student_brain.md) — Persistent student memory and mastery system.
-* [Knowledge Graph](file:///workspace/Maieutic/docs/knowledge_graph.md) — Concept graph and relationships.
-* [Misconception System](file:///workspace/Maieutic/docs/misconception_system.md) — Misconception detection and recovery.
-* [Tutoring Protocol](file:///workspace/Maieutic/docs/tutoring_protocol.md) — Rules governing Socratic tutoring behavior.
-* [Data Pipeline](file:///workspace/Maieutic/docs/data_pipeline.md) — Ingestion, deduplication, and transformation.
-* [Model Training](file:///workspace/Maieutic/docs/model_training.md) — Fine-tuning and RunPod training logs.
-* [Model Evaluation](file:///workspace/Maieutic/docs/model_evaluation.md) — AI evaluation benchmarks and LLM judge rubrics.
+### 1. Download Repository
+Authenticate with Hugging Face and use `huggingface-cli` to download the files:
+```bash
+# Authenticate
+export HF_TOKEN="your_huggingface_token"
+huggingface-cli login --token $HF_TOKEN
 
-### Phases & Progress
-* **Phase 0 / Phase 1 (Ingestion & Cleaning):** Documented in [docs/data_pipeline.md](file:///workspace/Maieutic/docs/data_pipeline.md).
-* **Phase 1.5 (Socratic Target Transformation):** Documented in [docs/phases/phase_2.md#phase-15--socratic-target-transformation](file:///workspace/Maieutic/docs/phases/phase_2.md#phase-15--socratic-target-transformation).
-* **Phase 2 (Model Fine-Tuning):** See the definitive handoff document at [docs/phases/phase_2.md](file:///workspace/Maieutic/docs/phases/phase_2.md).
-* **Hugging Face Restore Instructions:** Documented in [RESTORE.md](file:///workspace/Maieutic/RESTORE.md).
+# Download only the model adapter files (Necessary)
+huggingface-cli download NeelakshSaxena/mentorai \
+  --include "adapter_config.json" "adapter_model.safetensors" "chat_template.jinja" "tokenizer.json" "tokenizer_config.json" \
+  --local-dir ./outputs/qwen-8b-socratic-v1
 
----
+# Download evaluation artifacts (Optional)
+huggingface-cli download NeelakshSaxena/mentorai \
+  --include "evaluation/*" \
+  --local-dir ./training/
+```
 
-## Engineering Rule
+### 2. Load the Adapter in Python
+Load the adapter against the base model `Qwen/Qwen3-8B`:
+```python
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from peft import PeftModel
 
-Code must conform to these documents. If the implementation conflicts with the documentation:
-1. Identify the conflict.
-2. Explain it.
-3. Update the documentation if the architecture changes.
-4. Implement the code.
+base_model_name = "Qwen/Qwen3-8B"
+adapter_dir = "./outputs/qwen-8b-socratic-v1"
 
-Documentation and code must never silently diverge.
+tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
+model = AutoModelForCausalLM.from_pretrained(
+    base_model_name,
+    torch_dtype=torch.bfloat16,
+    device_map="auto"
+)
+model = PeftModel.from_pretrained(model, adapter_dir)
+```
+
+### 3. Resume Evaluation
+To execute the rescoring script:
+```bash
+python training/evaluation/rescore_evaluations.py
+```
+
+
+## Phase 2A (version: `phase2a_qwen3-8b_real-socratic_2026-09-15`)
+**STATUS: TRAINED — BEHAVIORAL EVALUATION PENDING**
+
+- **Goal**: Real Socratic tutoring data (Experiment 2)
+- **Base Model**: Qwen/Qwen3-8B
+- **Training Method**: QLoRA (4-bit, Rank 16, Alpha 32)
+- **Date**: 2026-09-15
+- **Dataset**: 13,859 training examples
+- **Epochs**: 1
+- **Note**: The sanity check passed (the adapter loads and generates text), but this does not establish Socratic behavioral improvement. Behavioral evaluation is pending.

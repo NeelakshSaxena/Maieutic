@@ -1,7 +1,7 @@
 # MentorAI Phase 2 Evaluation Report
 
 **Run:** SFT QWEN3-8B
-**Date:** 2026-09-14 13:24:58
+**Date:** 2026-09-14 13:51:17
 
 ## Metrics
 
@@ -13,6 +13,6 @@
 | Decomposition | 1.68 / 5 |
 | Misconception Detection | 1.19 / 5 |
 | Correctness | 2.68 / 5 |
-| GSM8K (Retention) | N/A |
-| MMLU (Retention) | N/A |
+| GSM8K (Retention) | 90.0% |
+| MMLU (Retention) | 75.0% |
 

@@ -17,9 +17,9 @@ def main():
     project_root = os.path.abspath(os.path.join(script_dir, "../.."))
     
     benchmark_path = os.path.join(project_root, "training/evaluation/mentorai_benchmark.jsonl")
-    dataset_path = os.path.join(project_root, "training/datasets/socratic/socratic_pilot_v1_5.jsonl")
-    cleaned_dataset_path = os.path.join(project_root, "training/datasets/socratic/socratic_pilot_v1_5_cleaned.jsonl")
-    smoke_dataset_path = os.path.join(project_root, "training/datasets/socratic/socratic_smoke_test.jsonl")
+    dataset_path = os.path.join(project_root, "training/datasets/socratic/socratic_phase1_5_v2.jsonl")
+    cleaned_dataset_path = os.path.join(project_root, "training/datasets/socratic/socratic_phase1_5_v2_cleaned.jsonl")
+    smoke_dataset_path = os.path.join(project_root, "training/datasets/socratic/socratic_smoke_test_v2.jsonl")
 
     # Load tokenizer for token length calculation
     print("Loading Qwen3 tokenizer for length analysis...")

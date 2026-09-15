@@ -55,20 +55,47 @@ def get_latest_metrics():
                 valid_lines = []
                 for line in lines:
                     line = line.strip()
-                    if not line:
-                        continue
+                    if not line: continue
                     try:
-                        data = json.loads(line)
-                        valid_lines.append(data)
-                    except json.JSONDecodeError:
-                        continue
+                        valid_lines.append(json.loads(line))
+                    except:
+                        pass
                         
                 if valid_lines:
-                    # latest valid line
                     latest = valid_lines[-1]
                     metrics.update(latest)
-                    # get last 5 events
                     metrics["recent_logs"] = [v for v in valid_lines[-5:]]
+                    metrics["history"] = []
+                    for v in valid_lines:
+                        if "step" in v and "loss" in v and "learning_rate" in v:
+                            metrics["history"].append({
+                                "step": v["step"],
+                                "loss": v["loss"],
+                                "learning_rate": v["learning_rate"],
+                                "epoch": v.get("epoch", 0)
+                            })
+                            
+                    # Calculate ETA and Elapsed Time
+                    import datetime
+                    import calendar
+                    first = valid_lines[0]
+                    try:
+                        fmt = "%Y-%m-%dT%H:%M:%SZ"
+                        start_t = datetime.datetime.strptime(first["timestamp"], fmt)
+                        latest_t = datetime.datetime.strptime(latest["timestamp"], fmt)
+                        elapsed = (latest_t - start_t).total_seconds()
+                        
+                        metrics["start_time_unix"] = calendar.timegm(start_t.timetuple())
+                        metrics["total_steps"] = 1646 # 13166 train examples / 8 batch size
+                        
+                        epoch = latest.get("epoch", 0.0)
+                        if epoch > 0.001 and elapsed > 0:
+                            total_estimated = elapsed / epoch
+                            metrics["total_estimated_seconds"] = total_estimated
+                        else:
+                            metrics["total_estimated_seconds"] = -1
+                    except Exception as e:
+                        pass
         except Exception as e:
             metrics["status"] = "ERROR_READING_METRICS"
             

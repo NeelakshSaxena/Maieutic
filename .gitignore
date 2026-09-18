@@ -22,4 +22,6 @@ temp_adapter_test_run.py
 .hf_cache/
 
 envvv
-.env
+.envmaieutic.db
+test_persistence.py
+.claude/

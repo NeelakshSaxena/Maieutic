@@ -1,46 +1,39 @@
 # MentorAI — Deployment
 
-## Development
+## Development & MVP (Current Phase)
 
-Docker Compose:
+The MVP is deployed as a multi-container Docker Compose stack. This provides a production-like environment on a local machine.
 
-- PostgreSQL
-- Redis
-- Qdrant
-- MinIO
+**Services (`docker-compose.yml`):**
+- `frontend`: Next.js App Router (Standalone Build)
+- `api`: FastAPI Python Backend
+- `db`: PostgreSQL
+- `redis`: Redis
+- `qdrant`: Qdrant Vector DB
 
-Run backend locally.
+**Inference:**
+The MVP relies on a local Ollama instance running on the host machine to leverage local GPUs, exposed to the Docker network via `host.docker.internal`.
 
-Run frontend locally.
+## Staging & Production Target
 
-Model can initially use an external API.
+When moving beyond local development, the architecture will shift to managed services.
 
-## Staging
+**Frontend:**
+- Vercel or containerized Next.js
 
-Frontend:
+**Backend:**
+- Containerized FastAPI on a cloud provider (AWS/GCP)
 
-Next.js deployment
+**AI / Inference:**
+- RunPod + vLLM endpoints serving the fine-tuned MentorAI models
 
-Backend:
+**Data:**
+- Managed PostgreSQL (e.g., AWS RDS, Supabase)
+- Managed Qdrant Cloud
 
-Containerized FastAPI
+## Production Architecture Diagram
 
-AI:
-
-RunPod vLLM endpoint
-
-Database:
-
-Managed PostgreSQL
-
-Vector:
-
-Qdrant
-
-## Production
-
-Architecture:
-
+```text
                     CDN
                      |
                   Next.js
@@ -61,18 +54,17 @@ Architecture:
                   vLLM
                      |
                   RunPod
+```
 
-## RunPod
+## RunPod Separation
 
-Separate endpoints:
-
-mentorai-inference
-
-mentorai-training
+Separate endpoints must be maintained:
+- `mentorai-inference`
+- `mentorai-training`
 
 Training should never share production inference resources.
 
-## Model Deployment
+## Model Deployment Lifecycle
 
 1. Train
 2. Evaluate
@@ -84,20 +76,12 @@ Training should never share production inference resources.
 
 ## Rollback
 
-Every production model must have a version.
-
-Example:
-
-mentorai-14b-v0.1
-
-mentorai-14b-v0.2
-
-Rollback must be possible without changing application code.
+Every production model must have a version (e.g., `mentorai-14b-v0.1`).
+Rollback must be possible via environment variable configuration without changing application code.
 
 ## Observability
 
 Track:
-
 - Request latency
 - Token usage
 - GPU utilization

@@ -1,89 +1,49 @@
 # MentorAI — API
 
-## Base
+## Base URL
+`/api/v1`
 
-/api/v1
+## Interactive Chat
 
-## Sessions
+`POST /chat`
+The main orchestrator endpoint for the conversational interface. It handles both generating the initial learning plan/checkpoints and verifying student responses.
 
-POST /sessions
-
-Create tutoring session.
-
-GET /sessions/{id}
-
-Retrieve session.
-
-POST /sessions/{id}/start
-
-Start session.
-
-## Checkpoints
-
-GET /sessions/{id}/checkpoints
-
-Get checkpoint state.
-
-POST /sessions/{id}/response
-
-Submit student response.
-
-Example:
-
+**Request payload (Session Initialization):**
+```json
 {
-  "checkpoint_id": "...",
-  "response": "..."
+  "student_id": "string",
+  "concept": "string",
+  "message": "string"
 }
+```
 
-Response:
-
+**Request payload (Student Response):**
+```json
 {
-  "status": "partial",
-  "feedback": "...",
-  "hint_available": true,
-  "next_action": "hint"
+  "student_id": "string",
+  "concept": "string",
+  "message": "string",
+  "checkpoint": { ... },
+  "plan": { ... }
 }
+```
 
-## Hints
+## Session Management
 
-POST /sessions/{id}/hint
-
-Request next hint.
+`POST /session`
+Initialize a new tutoring session manually (currently wrapped inside `/chat`).
 
 ## Student Brain
 
-GET /students/{id}/brain
+`GET /brain/{user_id}`
+Retrieve the student's overall mastery profile, including the moving average of their correct/incorrect attempts across concepts.
 
-GET /students/{id}/concepts
-
-GET /students/{id}/mastery
-
-GET /students/{id}/misconceptions
-
-## Concepts
-
-GET /concepts/{id}
-
-GET /concepts/{id}/relationships
-
-## Analytics
-
-GET /students/{id}/analytics
+`GET /revision/{user_id}`
+Retrieve a list of concepts that are due for spaced repetition review based on the SM-2 scheduler.
 
 ## Authentication
-
-Use token-based authentication.
-
+Use token-based authentication (to be implemented). 
 Never expose internal database IDs unnecessarily.
 
 ## API Rule
-
-The backend is the authority over session progression.
-
-The LLM cannot directly decide:
-
-"Checkpoint completed."
-
-It can recommend a state.
-
-Backend validates the recommendation against protocol rules.d
+The backend is the absolute authority over session progression. The LLM cannot directly decide "Checkpoint completed." It can only recommend a state (`correct`, `incorrect`, `partial`). The Backend validates the recommendation against the protocol rules and mutates the Student Brain state accordingly.

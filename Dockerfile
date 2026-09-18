@@ -14,7 +14,7 @@ FROM python:3.12-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install Node.js, Supervisor, Postgres, Redis, Wget, and curl
-RUN apt-get update && apt-get install -y curl supervisor postgresql postgresql-contrib redis-server wget pciutils && \
+RUN apt-get update && apt-get install -y curl supervisor postgresql postgresql-contrib redis-server wget && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     apt-get clean && \

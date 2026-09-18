@@ -256,6 +256,7 @@ See [docs/troubleshooting.md](docs/troubleshooting.md) and [docs/ollama.md](docs
 
 - [README.md](README.md) (This file)
 - [Getting Started](docs/getting-started.md)
+- [Hardware Requirements](docs/hardware-requirements.md)
 - [System Architecture](docs/system_architecture.md)
 - [Student Brain](docs/student_brain.md)
 - [API Documentation](docs/api.md)

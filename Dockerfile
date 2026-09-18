@@ -27,8 +27,7 @@ RUN curl -fsSL https://ollama.com/install.sh | sh
 RUN wget https://github.com/qdrant/qdrant/releases/download/v1.8.4/qdrant-x86_64-unknown-linux-gnu.tar.gz && \
     tar -xzf qdrant-x86_64-unknown-linux-gnu.tar.gz && \
     mv qdrant /usr/local/bin/ && \
-    rm qdrant-x86_64-unknown-linux-gnu.tar.gz && \
-    mkdir -p /var/lib/qdrant
+    rm qdrant-x86_64-unknown-linux-gnu.tar.gz
 
 
 

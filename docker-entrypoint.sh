@@ -10,19 +10,30 @@ echo "=========================================="
 # Initialize PostgreSQL if necessary
 # ------------------------------------------------------------
 
-if [ ! -s "/var/lib/postgresql/data/PG_VERSION" ]; then
+PG_DATA="/workspace/postgres/data"
+PG_BIN=$(su - postgres -c "pg_config --bindir" 2>/dev/null || find /usr/lib/postgresql -name initdb -type f -executable | head -n 1 | xargs dirname)
+
+if [ -z "$PG_BIN" ]; then
+    echo "[PostgreSQL] ERROR: Could not locate PostgreSQL bin directory."
+    exit 1
+fi
+
+export PG_BIN
+echo "[PostgreSQL] Using binary path: $PG_BIN"
+
+if [ ! -s "$PG_DATA/PG_VERSION" ]; then
 
     echo "[PostgreSQL] Initializing database..."
 
-    mkdir -p /var/lib/postgresql/data
-    chown -R postgres:postgres /var/lib/postgresql/data
+    mkdir -p "$PG_DATA"
+    chown -R postgres:postgres "$PG_DATA"
 
-    su - postgres -c "/usr/lib/postgresql/15/bin/initdb -D /var/lib/postgresql/data"
+    su - postgres -c "$PG_BIN/initdb -D $PG_DATA"
 
     echo "[PostgreSQL] Starting temporary server..."
 
-    su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl \
-        -D /var/lib/postgresql/data \
+    su - postgres -c "$PG_BIN/pg_ctl \
+        -D $PG_DATA \
         -o '-c listen_addresses=localhost' \
         -w start"
 
@@ -34,8 +45,8 @@ if [ ! -s "/var/lib/postgresql/data/PG_VERSION" ]; then
 
     echo "[PostgreSQL] Stopping temporary server..."
 
-    su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl \
-        -D /var/lib/postgresql/data \
+    su - postgres -c "$PG_BIN/pg_ctl \
+        -D $PG_DATA \
         -m fast \
         -w stop"
 

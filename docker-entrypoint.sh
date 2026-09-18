@@ -46,6 +46,8 @@ fi
 # Pull Ollama model if it isn't already present
 # ------------------------------------------------------------
 
+export OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2}
+
 echo "[Ollama] Checking model..."
 
 (
@@ -55,11 +57,11 @@ echo "[Ollama] Checking model..."
         sleep 2
     done
 
-    if ! ollama list | grep -q "qwen2"; then
-        echo "[Ollama] Pulling qwen2..."
-        ollama pull qwen2
+    if ! ollama list | grep -q "$OLLAMA_MODEL"; then
+        echo "[Ollama] Pulling $OLLAMA_MODEL..."
+        ollama pull "$OLLAMA_MODEL"
     else
-        echo "[Ollama] qwen2 already exists."
+        echo "[Ollama] $OLLAMA_MODEL already exists."
     fi
 
 ) &

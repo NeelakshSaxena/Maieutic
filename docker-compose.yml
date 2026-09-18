@@ -1,65 +1,25 @@
 version: '3.8'
 
 services:
-  api:
-    build:
-      context: ./apps/api
-      dockerfile: Dockerfile
-    container_name: mentorai_api
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/mentorai
-      - QDRANT_URL=http://qdrant:6333
-      - REDIS_URL=redis://redis:6379
-      - LLM_BASE_URL=${LLM_BASE_URL}
-      - LLM_API_KEY=${LLM_API_KEY}
-      - LLM_MODEL=${LLM_MODEL}
-    depends_on:
-      - db
-      - qdrant
-      - redis
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  db:
-    image: postgres:15-alpine
-    container_name: mentorai_db
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=mentorai
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
-    volumes:
-      - qdrant_data:/qdrant/storage
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-  frontend:
-    build:
-      context: ./apps/frontend
-      dockerfile: Dockerfile
-    container_name: mentorai_frontend
+  maieutic:
+    build: .
+    container_name: maieutic_app
     ports:
       - "3000:3000"
+      - "8000:8000"
+      - "11434:11434"
+      - "6333:6333"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ollama_data:/var/lib/ollama
+      - qdrant_data:/var/lib/qdrant
+      - redis_data:/data
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
-    depends_on:
-      - api
+      - OLLAMA_MODEL=qwen2
+      - LLM_API_KEY=${LLM_API_KEY:-}
 
 volumes:
-  pg_data:
+  postgres_data:
+  ollama_data:
   qdrant_data:
   redis_data:

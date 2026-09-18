@@ -21,11 +21,7 @@ RUN apt-get update && apt-get install -y curl supervisor postgresql postgresql-c
     rm -rf /var/lib/apt/lists/*
 
 # Install Ollama and Pre-pull the Qwen2 model
-RUN curl -fsSL https://ollama.com/install.sh | sh && \
-    nohup bash -c "ollama serve &" && \
-    sleep 5 && \
-    ollama pull qwen2 && \
-    pkill ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Install Qdrant
 RUN wget https://github.com/qdrant/qdrant/releases/download/v1.8.4/qdrant-x86_64-unknown-linux-gnu.tar.gz && \
@@ -34,13 +30,7 @@ RUN wget https://github.com/qdrant/qdrant/releases/download/v1.8.4/qdrant-x86_64
     rm qdrant-x86_64-unknown-linux-gnu.tar.gz && \
     mkdir -p /var/lib/qdrant
 
-# Setup Postgres Database and User
-USER postgres
-RUN /etc/init.d/postgresql start && \
-    psql -c "ALTER USER postgres WITH PASSWORD 'postgres';" && \
-    createdb -O postgres mentorai && \
-    /etc/init.d/postgresql stop
-USER root
+
 
 # Setup Poetry
 RUN pip install poetry==1.8.2
@@ -59,12 +49,14 @@ COPY --from=frontend-builder /app/frontend/public ./public
 COPY --from=frontend-builder /app/frontend/.next/standalone ./
 COPY --from=frontend-builder /app/frontend/.next/static ./.next/static
 
-# Setup Supervisor
+# Setup Supervisor and Entrypoint
 WORKDIR /app
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Expose API (8000), Frontend (3000), Postgres (5432), Redis (6379), Qdrant (6333), Ollama (11434)
 EXPOSE 3000 8000 5432 6379 6333 11434
 
-# Start everything via Supervisor
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Start everything via entrypoint
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

@@ -1,9 +1,29 @@
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from app.agents.orchestrator import Orchestrator
-from app.agents.mastery import MasteryTracker
+from app.services.student_brain import StudentBrainService
+from app.db.models import Base, StudentProfile, ConceptMasteryState
 from app.schemas.planner_schemas import Concept, Checkpoint, LearningPlan
 from app.schemas.verifier_schemas import VerificationResult, VerificationStatus
 from app.schemas.hint_schemas import HintResult, HintLevel
+
+# Test DB Setup
+engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+@pytest.fixture
+def db_session():
+    Base.metadata.create_all(bind=engine)
+    db = TestingSessionLocal()
+    yield db
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+@pytest.fixture
+def brain(db_session):
+    return StudentBrainService(db=db_session, qdrant=None) # Qdrant mocked out
 
 class DummyPlanner:
     async def generate_plan(self, query):
@@ -45,31 +65,32 @@ class DummyHint:
         )
 
 @pytest.mark.asyncio
-async def test_orchestrator_initial_plan():
-    orch = Orchestrator(DummyPlanner(), DummyVerifier([]), DummyHint(), MasteryTracker())
+async def test_orchestrator_initial_plan(brain):
+    orch = Orchestrator(DummyPlanner(), DummyVerifier([]), DummyHint(), brain)
     res = await orch.process_student_input("session1", "student1", "teach me")
     assert res["type"] == "new_plan"
     assert res["checkpoint"].id == "cp1"
 
 @pytest.mark.asyncio
-async def test_orchestrator_correct_advance():
-    orch = Orchestrator(DummyPlanner(), DummyVerifier([VerificationStatus.CORRECT]), DummyHint(), MasteryTracker())
+async def test_orchestrator_correct_advance(brain, db_session):
+    orch = Orchestrator(DummyPlanner(), DummyVerifier([VerificationStatus.CORRECT]), DummyHint(), brain)
     await orch.process_student_input("session1", "student1", "teach me") # Init plan
     
     res = await orch.process_student_input("session1", "student1", "correct answer")
     assert res["type"] == "correct"
     assert res["next_checkpoint"].id == "cp2"
     
-    # Check mastery updated
-    profile = orch.mastery_tracker.get_profile("student1")
-    assert profile.mastery_by_concept["c1"].historical_mastery == 1.0
-    assert profile.mastery_by_concept["c1"].attempts == 1
+    # Check mastery updated in DB
+    profile = db_session.query(StudentProfile).filter_by(user_id="student1").first()
+    state = db_session.query(ConceptMasteryState).filter_by(profile_id=profile.id, concept_id="c1").first()
+    assert state.historical_mastery == 1.0
+    assert state.attempts == 1
 
 @pytest.mark.asyncio
-async def test_orchestrator_incorrect_hint_escalation():
+async def test_orchestrator_incorrect_hint_escalation(brain):
     # 3 incorrects in a row
     statuses = [VerificationStatus.INCORRECT, VerificationStatus.INCOMPLETE, VerificationStatus.INCORRECT]
-    orch = Orchestrator(DummyPlanner(), DummyVerifier(statuses), DummyHint(), MasteryTracker())
+    orch = Orchestrator(DummyPlanner(), DummyVerifier(statuses), DummyHint(), brain)
     await orch.process_student_input("session1", "student1", "teach me")
     
     # Attempt 1
@@ -88,8 +109,8 @@ async def test_orchestrator_incorrect_hint_escalation():
     assert res3["hint"].level_used == HintLevel.LEVEL_3
 
 @pytest.mark.asyncio
-async def test_orchestrator_off_topic():
-    orch = Orchestrator(DummyPlanner(), DummyVerifier([VerificationStatus.OFF_TOPIC]), DummyHint(), MasteryTracker())
+async def test_orchestrator_off_topic(brain):
+    orch = Orchestrator(DummyPlanner(), DummyVerifier([VerificationStatus.OFF_TOPIC]), DummyHint(), brain)
     await orch.process_student_input("session1", "student1", "teach me")
     
     res = await orch.process_student_input("session1", "student1", "what is life")
@@ -97,5 +118,5 @@ async def test_orchestrator_off_topic():
     assert "focused" in res["message"]
     
     # Session hint level should not escalate
-    session = orch.get_session("session1", "student1")
+    session = brain.get_session("session1")
     assert session.current_hint_level == 1

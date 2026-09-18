@@ -2,143 +2,98 @@
 
 ## 1. Architecture
 
-MVP uses a modular monolith.
+MVP uses a modular monolithic architecture orchestrated via Docker Compose.
 
-Frontend:
+**Frontend:**
+- Next.js (App Router)
+- React
+- Tailwind CSS & shadcn/ui
 
-Next.js
-React
-Tailwind
+**Backend:**
+- FastAPI (Python 3.11+)
+- Dependency Injection (StudentBrainService, LLMClient)
 
-Backend:
+**AI Orchestrator (Backend Module):**
+- Model Gateway (LLMClient)
+  - Planner Agent
+  - Checkpoint Generator
+  - Verifier Agent
+  - Hint Generator
+  - Misconception Detector
 
-FastAPI
+**Data / Persistence (Student Brain):**
+- PostgreSQL (Primary store via SQLAlchemy/Alembic)
+- Redis (Fast transient state / PubSub)
+- Qdrant (Semantic search / Concept embeddings)
 
-AI:
+**Inference:**
+- Local: Ollama (qwen2 / qwen2-socratic)
+- Production Target: RunPod + vLLM
 
-Model Gateway
-    |
-    +-- Planner
-    +-- Checkpoint Generator
-    +-- Verifier
-    +-- Hint Generator
-    +-- Misconception Detector
-    +-- Mastery Engine
-
-Data:
-
-PostgreSQL
-Redis
-Qdrant
-Object Storage
-
-Inference:
-
-RunPod + vLLM
-
-Training:
-
-RunPod + Hugging Face + PEFT/TRL
+**Training:**
+- RunPod + Hugging Face + PEFT/TRL
 
 ## 2. Request Flow
 
-Student
+```text
+Student (Browser)
     |
     v
-Next.js
+Next.js (Port 3000)
     |
     v
-FastAPI
+FastAPI (Port 8000)
     |
     v
 Tutoring Orchestrator
     |
-    +--> Student Brain Retrieval
+    +--> Student Brain Service (PostgreSQL / Qdrant)
     |
-    +--> Planner
-    |
-    +--> Checkpoint Generator
-    |
-    v
-Response
+    +--> LLM Gateway (Ollama port 11434)
+    |      +--> Planner / Checkpoint / Verifier / Hint
     |
     v
-Student
-
-When student responds:
-
-Student
+Response (Structured JSON)
     |
     v
-Verifier
-    |
-    +--> Misconception Detector
-    |
-    +--> Mastery Engine
-    |
-    +--> Hint Generator
-    |
-    v
-Session State
-    |
-    +--> PostgreSQL
-    +--> Student Brain
-    +--> Analytics
+Student (Browser via Next.js)
+```
 
-## 3. Infrastructure
+**Evaluation / Validation Flow:**
 
-MVP:
+When a student responds to a checkpoint:
 
-Next.js
-FastAPI
-PostgreSQL
-Redis
-Qdrant
-RunPod
+1. **Verifier:** Checks if the response is correct, incorrect, partial, or off-topic.
+2. **Mastery Engine:** Updates the Student Brain (EMA model in PostgreSQL).
+3. **Misconception Detector:** Logs specific conceptual errors.
+4. **Hint Generator:** (If needed) Generates exactly one HintLevel based on the Verification result.
 
-Do not split agents into independent microservices initially.
+## 3. Infrastructure (MVP)
+
+All components run locally via `docker-compose.yml`:
+- `frontend` (Next.js)
+- `api` (FastAPI)
+- `db` (PostgreSQL)
+- `redis` (Redis)
+- `qdrant` (Qdrant)
+
+*Note: Ollama runs on the host machine to easily leverage Apple Silicon / local GPUs, and is accessed via the `host.docker.internal` bridge.*
 
 ## 4. Model Gateway
 
-All model calls must pass through a single abstraction.
+All model calls pass through `LLMClient.generate_structured_output()`.
 
-Example:
+This abstraction allows:
+- **Development:** Ollama (`qwen2`)
+- **Staging/Production:** RunPod + vLLM (`qwen-8b-socratic`)
 
-ModelGateway.generate()
+The Orchestrator defines Pydantic schemas, which the Model Gateway forces the LLM to output. If the LLM hallucinates schema structure, the Gateway catches the `ValidationError` and automatically retries with error feedback.
 
-The application should not directly depend on a particular inference provider.
+## 5. State Machine
 
-This allows:
+The session progression is dictated by the Backend logic, *not* the LLM. The LLM only recommends verification states, and the FastAPI application transitions the session state.
 
-Development:
-API model
-
-Staging:
-RunPod model
-
-Production:
-Fine-tuned MentorAI model
-
-## 5. Async Jobs
-
-Use Redis-backed workers for:
-
-- Embedding
-- Knowledge graph updates
-- Analytics aggregation
-- Dataset generation
-- Long-running evaluations
-
-## 6. Reliability
-
-AI responses must be schema validated.
-
-Invalid model output must never directly mutate Student Brain state.
-
-Every state transition must be validated by backend logic.
-
-## 7. State Machine
-
+```text
 SESSION_CREATED
     |
 PLANNING
@@ -168,3 +123,4 @@ CHECKPOINT_COMPLETED
     +--> MORE_CHECKPOINTS --> CHECKPOINT_ACTIVE
     |
     +--> COMPLETE --> SESSION_COMPLETE
+```

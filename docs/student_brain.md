@@ -1,126 +1,44 @@
 # MentorAI — Student Brain
 
 ## 1. Purpose
+The Student Brain is a persistent representation of what a learner knows, tracking mastery over time across different concepts using empirical performance data. It is stored across PostgreSQL (relational records) and Qdrant (semantic search).
 
-The Student Brain is a persistent representation of what a learner knows.
+## 2. Mastery Tracking (EMA)
 
-It is not simply conversation memory.
+Mastery is not a simple average. MentorAI uses an **Exponential Moving Average (EMA)** to calculate a student's mastery of a concept.
+- **Why EMA?** A student who fails 5 times and then succeeds 5 times has likely learned the concept. A simple average (50%) would not reflect their current understanding. EMA heavily weights the most recent attempts.
+- **Calculation:** When the Verifier evaluates an attempt as `correct`, the EMA increases. When it evaluates as `incorrect`, the EMA decreases. `partial` attempts have a smaller positive/neutral weight.
 
-## 2. Layers
+## 3. Spaced Repetition (SuperMemo-2)
 
-### Layer 1 — Episodic Memory
+The Student Brain includes a simplified implementation of the SuperMemo-2 (SM-2) algorithm.
+- Every time a concept is practiced, the `next_review_date` is recalculated based on the EMA mastery and the consecutive correct attempts.
+- If the student struggles, the review interval shrinks (e.g., review tomorrow).
+- If the student demonstrates mastery, the review interval expands (e.g., review in 7 days).
 
-What happened.
+## 4. Concept Record
 
-Examples:
+**StudentConcept (Mastery State in DB):**
+- `student_id`
+- `concept_id`
+- `mastery_level` (The EMA float value: 0.0 to 1.0)
+- `correct_attempts`
+- `incorrect_attempts`
+- `partial_attempts`
+- `last_reviewed_at`
+- `next_review_date`
 
-- Session
-- Question
-- Response
-- Hint
-- Mistake
+## 5. Memory Retrieval Pipeline
 
-### Layer 2 — Semantic Knowledge
+Before the LLM starts tutoring, the `StudentBrainService` executes the retrieval pipeline:
 
-What the student knows.
+1. Identify relevant concepts (Query Qdrant).
+2. Retrieve mastery states (Query PostgreSQL).
+3. Retrieve misconceptions (If applicable).
+4. **Inject context:** Only the exact concepts and mastery levels relevant to the current session are injected into the Planner Agent's context.
 
-Examples:
-
-- Binary Search
-- Recursion
-- Derivatives
-
-### Layer 3 — Mastery
-
-How well the student understands a concept.
-
-### Layer 4 — Misconceptions
-
-What the student consistently gets wrong.
-
-### Layer 5 — Relationships
-
-How concepts connect.
-
-### Layer 6 — Personal Knowledge
-
-Student-created:
-
-- Notes
-- Analogies
-- Explanations
-- Examples
-- Projects
-
-## 3. Concept Record
-
-Concept:
-
-- id
-- name
-- domain
-- description
-- prerequisites
-
-StudentConcept:
-
-- student_id
-- concept_id
-- mastery
-- confidence
-- attempts
-- correct_attempts
-- hints_used
-- last_seen
-- next_review
-
-## 4. Example
-
-Concept:
-
-Binary Search
-
-Mastery:
-0.82
-
-Confidence:
-0.76
-
-Attempts:
-8
-
-Correct:
-6
-
-Misconceptions:
-
-- Forgetting sorted-array prerequisite
-
-Related:
-
-- Arrays
-- Sorting
-- Divide and Conquer
-
-Personal explanation:
-
-"Cut the search space in half every time."
-
-## 5. Memory Retrieval
-
-Before tutoring:
-
-1. Identify relevant concepts.
-2. Retrieve mastery.
-3. Retrieve misconceptions.
-4. Retrieve relevant prior explanations.
-5. Retrieve related projects.
-6. Inject only relevant context.
-
-Do not dump the entire Student Brain into the model context.
+*Rule: Do not dump the entire Student Brain into the model context.*
 
 ## 6. Privacy
 
-Student data is private by default.
-
-Training on user interactions requires explicit consent and appropriate anonymization.
+Student data is private by default. Training on user interactions requires explicit consent and appropriate anonymization.

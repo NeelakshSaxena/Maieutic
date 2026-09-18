@@ -1,144 +1,61 @@
 # MentorAI — Database
 
-## Core Tables
+MentorAI utilizes a hybrid database approach: PostgreSQL for structured relational data and Qdrant for semantic concept embeddings.
 
-users
+## 1. PostgreSQL (Relational State)
 
-students
+The primary data store is PostgreSQL, managed via SQLAlchemy ORM and Alembic migrations.
 
-sessions
+### Core Tables
 
-session_checkpoints
+#### `student_profiles`
+- `id` (UUID, Primary Key)
+- `email` (String, Unique)
+- `created_at` (DateTime)
 
-checkpoint_attempts
+#### `concepts`
+- `id` (String, Primary Key) - e.g., 'python_variables'
+- `name` (String)
+- `domain` (String)
+- `description` (Text)
 
-concepts
+#### `concept_mastery_states`
+Tracks the student's mastery of specific concepts using an Exponential Moving Average (EMA).
+- `id` (UUID, Primary Key)
+- `student_id` (UUID, Foreign Key -> `student_profiles`)
+- `concept_id` (String, Foreign Key -> `concepts`)
+- `mastery_level` (Float) - The EMA score.
+- `correct_attempts` (Integer)
+- `partial_attempts` (Integer)
+- `incorrect_attempts` (Integer)
+- `last_reviewed_at` (DateTime)
+- `next_review_date` (DateTime) - Used for spaced repetition (SM-2).
 
-concept_relationships
+#### `learning_sessions`
+- `id` (UUID, Primary Key)
+- `student_id` (UUID, Foreign Key -> `student_profiles`)
+- `goal_concept_id` (String)
+- `created_at` (DateTime)
+- `completed_at` (DateTime, Nullable)
+- `status` (String) - e.g., 'active', 'completed'
+- `history` (JSON) - Serialized checkpoint history.
 
-student_concepts
+## 2. Qdrant (Semantic State)
 
-misconceptions
+Qdrant is used to store and retrieve concepts based on semantic similarity.
 
-student_misconceptions
+### Collection: `concepts`
+- **Vector:** The embedding of the concept's description/name.
+- **Payload:**
+  - `concept_id`: The ID matching the PostgreSQL `concepts` table.
+  - `domain`: The domain of the concept.
 
-hints
+When the Orchestrator plans a session, it queries Qdrant to find related prerequisite concepts to inject into the LLM's context window.
 
-interactions
+## 3. Redis (Transient State)
+Redis is currently provisioned for caching and pub/sub. It is not used for persistent storage.
 
-projects
+## Important Rule
 
-student_notes
-
-revision_schedule
-
-model_evaluations
-
-## users
-
-id
-email
-created_at
-
-## sessions
-
-id
-student_id
-question
-domain
-status
-created_at
-completed_at
-
-## checkpoints
-
-id
-session_id
-concept_id
-sequence
-objective
-question
-status
-
-## attempts
-
-id
-checkpoint_id
-student_id
-response
-evaluation
-correctness
-created_at
-
-## concepts
-
-id
-canonical_id
-name
-domain
-description
-
-## student_concepts
-
-student_id
-concept_id
-mastery
-confidence
-attempts
-correct_attempts
-hints_used
-last_seen
-next_review
-
-## misconceptions
-
-id
-concept_id
-canonical_id
-description
-severity
-
-## student_misconceptions
-
-student_id
-misconception_id
-confidence
-occurrences
-resolved
-last_seen
-
-## interactions
-
-id
-session_id
-student_id
-type
-input
-output
-model
-prompt_version
-created_at
-
-## projects
-
-id
-student_id
-name
-description
-created_at
-
-## revision_schedule
-
-student_id
-concept_id
-scheduled_at
-reason
-completed
-
-## Important
-
-Do not store every model-generated field blindly.
-
-Persist validated, structured state.
-
-Raw model traces should have separate retention policies.
+Do not store every raw model-generated trace in PostgreSQL.
+Persist validated, structured state. Raw model traces should have separate retention policies or be pushed to an analytics data warehouse.

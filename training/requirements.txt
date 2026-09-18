@@ -1,0 +1,14 @@
+torch
+transformers<=5.5.0
+accelerate
+peft
+trl<=0.24.0
+bitsandbytes
+unsloth
+wandb
+openai
+python-dotenv
+deepspeed
+lm-eval
+pydantic
+flask

@@ -1,80 +1,101 @@
-# MentorAI Documentation
+---
+license: mit
+base_model: Qwen/Qwen3-8B
+tags:
+- lora
+- socratic-tutor
+- mentorai
+---
 
-## Source of Truth
+# MentorAI: Socratic Tutoring Model Card
 
-This directory contains the technical and product specifications for MentorAI.
+This is the repository containing the QLoRA adapter for **MentorAI Experiment #1**.
 
-## Documents
+* **BASE MODEL:** `Qwen/Qwen3-8B`
+* **EXPERIMENT:** `experiment_01_contradictory_socratic_supervision`
+* **TRAINING TYPE:** QLoRA
+* **EPOCHS:** 1
+* **STEPS:** 2586
+* **MAX SEQUENCE LENGTH:** 4096
+* **GPU:** RTX 4090 24GB
 
-PRD.md
+---
 
-Product requirements and MVP scope.
+## How to Restore MentorAI
 
-SYSTEM_ARCHITECTURE.md
+This single private Hugging Face repository holds all model and training artifacts for the MentorAI project. Use the instructions below to resume work.
 
-Overall system architecture.
+### Artifact Locations
+* **LoRA Adapter & Tokenizer files:** Located at the root of this repository:
+  * `adapter_config.json`
+  * `adapter_model.safetensors`
+  * `chat_template.jinja`
+  * `tokenizer.json`
+  * `tokenizer_config.json`
+* **Evaluation Benchmark & Reports:** Located in `/evaluation/`:
+  * `mentorai_benchmark.jsonl` (evaluation benchmark)
+  * `report_base.md` / `report_sft.md` (rescoring reports)
+  * `generated_responses_base.jsonl` / `generated_responses_sft.jsonl` (raw outputs)
+* **Phase 1.5 Pilot Dataset:** Located in `/pilot/`:
+  * `socratic_pilot.jsonl` (transformed Socratic dataset)
+  * `rejections.jsonl` (audit trail of rejected examples)
+  * `pilot_stats.json` (quality metrics and categorization)
 
-AI_ARCHITECTURE.md
+### Necessary vs Optional Downloads
+* **Necessary (to load model):** Root-level files (`adapter_config.json`, `adapter_model.safetensors`, tokenizer files).
+* **Optional (for replication/analysis):** `evaluation/` and `pilot/` subdirectories.
 
-AI agents and model architecture.
+### 1. Download Repository
+Authenticate with Hugging Face and use `huggingface-cli` to download the files:
+```bash
+# Authenticate
+export HF_TOKEN="your_huggingface_token"
+huggingface-cli login --token $HF_TOKEN
 
-STUDENT_BRAIN.md
+# Download only the model adapter files (Necessary)
+huggingface-cli download NeelakshSaxena/mentorai \
+  --include "adapter_config.json" "adapter_model.safetensors" "chat_template.jinja" "tokenizer.json" "tokenizer_config.json" \
+  --local-dir ./outputs/qwen-8b-socratic-v1
 
-Persistent student memory and mastery system.
+# Download evaluation artifacts (Optional)
+huggingface-cli download NeelakshSaxena/mentorai \
+  --include "evaluation/*" \
+  --local-dir ./training/
+```
 
-KNOWLEDGE_GRAPH.md
+### 2. Load the Adapter in Python
+Load the adapter against the base model `Qwen/Qwen3-8B`:
+```python
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from peft import PeftModel
 
-Concept graph and relationships.
+base_model_name = "Qwen/Qwen3-8B"
+adapter_dir = "./outputs/qwen-8b-socratic-v1"
 
-MISCONCEPTION_SYSTEM.md
+tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
+model = AutoModelForCausalLM.from_pretrained(
+    base_model_name,
+    torch_dtype=torch.bfloat16,
+    device_map="auto"
+)
+model = PeftModel.from_pretrained(model, adapter_dir)
+```
 
-Misconception detection and recovery.
+### 3. Resume Evaluation
+To execute the rescoring script:
+```bash
+python training/evaluation/rescore_evaluations.py
+```
 
-TUTORING_PROTOCOL.md
 
-Rules governing tutoring behavior.
+## Phase 2A (version: `phase2a_qwen3-8b_real-socratic_2026-09-15`)
+**STATUS: TRAINED — BEHAVIORAL EVALUATION PENDING**
 
-DATA_PIPELINE.md
-
-Dataset ingestion and transformation.
-
-MODEL_TRAINING.md
-
-Fine-tuning and RunPod training.
-
-MODEL_EVALUATION.md
-
-AI evaluation and regression testing.
-
-API.md
-
-Backend API contract.
-
-DATABASE.md
-
-Database design.
-
-SECURITY.md
-
-Security and privacy.
-
-DEPLOYMENT.md
-
-Infrastructure and deployment.
-
-ROADMAP.md
-
-Development roadmap.
-
-## Engineering Rule
-
-Code must conform to these documents.
-
-If implementation conflicts with documentation:
-
-1. Identify the conflict.
-2. Explain it.
-3. Update documentation if the architecture changes.
-4. Then implement.
-
-Documentation and code must never silently diverge.
+- **Goal**: Real Socratic tutoring data (Experiment 2)
+- **Base Model**: Qwen/Qwen3-8B
+- **Training Method**: QLoRA (4-bit, Rank 16, Alpha 32)
+- **Date**: 2026-09-15
+- **Dataset**: 13,859 training examples
+- **Epochs**: 1
+- **Note**: The sanity check passed (the adapter loads and generates text), but this does not establish Socratic behavioral improvement. Behavioral evaluation is pending.

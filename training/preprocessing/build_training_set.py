@@ -36,6 +36,34 @@ def main():
     print("Saving final datasets...")
     split_ds.save_to_disk(final_dir)
     
+    # Export Phase 1 processed JSONL files for Phase 2 SFT training
+    processed_dir = os.path.join(root_dir, "training", "datasets", "processed")
+    os.makedirs(processed_dir, exist_ok=True)
+    
+    import json
+    # Group samples by source and save
+    lmsys_samples = []
+    numina_samples = []
+    
+    for sample in combined_ds:
+        source = sample.get("source_dataset", "").lower()
+        if "lmsys" in source or "wildchat" in source:
+            lmsys_samples.append(sample)
+        else:
+            numina_samples.append(sample)
+            
+    lmsys_path = os.path.join(processed_dir, "lmsys_processed.jsonl")
+    with open(lmsys_path, "w", encoding="utf-8") as f:
+        for s in lmsys_samples:
+            f.write(json.dumps(s) + "\n")
+    print(f"Exported {len(lmsys_samples)} samples to {lmsys_path}")
+    
+    numina_path = os.path.join(processed_dir, "NuminaMath_processed.jsonl")
+    with open(numina_path, "w", encoding="utf-8") as f:
+        for s in numina_samples:
+            f.write(json.dumps(s) + "\n")
+    print(f"Exported {len(numina_samples)} samples to {numina_path}")
+    
     # Generate report
     total_samples = len(combined_ds)
     df_stats = pd.DataFrame(stats)

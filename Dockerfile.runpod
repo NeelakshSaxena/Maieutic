@@ -53,4 +53,5 @@ RUN chmod +x /app/runpod_entrypoint.sh /app/model_bootstrap.sh
 EXPOSE 3000
 
 # Start all services
-CMD ["/bin/bash", "/app/runpod_entrypoint.sh"]
+ENTRYPOINT ["/bin/bash", "/app/runpod_entrypoint.sh"]
+CMD []

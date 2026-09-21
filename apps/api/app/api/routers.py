@@ -27,7 +27,13 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
             verification=res.get("verification").model_dump() if res.get("verification") else None
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        if "Connection error" in error_msg or "connect" in error_msg.lower():
+            raise HTTPException(
+                status_code=503, 
+                detail="The AI model is still downloading or initializing. This takes 5-10 minutes on the first startup. Please wait a moment and try again!"
+            )
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @api_router.get("/session/{session_id}")
 async def get_session_endpoint(session_id: str, db: Session = Depends(get_db)):

@@ -2,17 +2,16 @@
 
 ## Development & MVP (Current Phase)
 
-The MVP is deployed as a multi-container Docker Compose stack. This provides a production-like environment on a local machine.
+The MVP is deployed as a single, unified Docker container designed to run seamlessly on a GPU RunPod instance. This eliminates Docker-in-Docker complexity while encapsulating the entire stack.
 
-**Services (`docker-compose.yml`):**
-- `frontend`: Next.js App Router (Standalone Build)
-- `api`: FastAPI Python Backend
-- `db`: PostgreSQL
-- `redis`: Redis
-- `qdrant`: Qdrant Vector DB
+**Services (Single Container):**
+- `frontend`: Next.js App Router (Port 3000)
+- `api`: FastAPI Python Backend (Port 8000)
+- `model`: vLLM Server serving Qwen3-8B + LoRA (Port 11434)
+- `db`: SQLite database stored on persistent volume (`/workspace/maieutic.db`)
 
 **Inference:**
-The MVP relies on a local Ollama instance running on the host machine to leverage local GPUs, exposed to the Docker network via `host.docker.internal`.
+The MVP relies on a local vLLM instance running natively inside the same container. The frontend proxies requests to the FastAPI backend, which directly communicates with the local vLLM instance via `localhost`.
 
 ## Staging & Production Target
 

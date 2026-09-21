@@ -230,38 +230,37 @@ Because all processes run in the same container, they communicate securely via `
 
 | Issue | Verification | Fix |
 |-------|--------------|-----|
-| Container won't start | `docker compose ps` | Check `docker compose logs <service>` for crash reasons. |
-| vLLM OOM Error | `docker logs maieutic_model` | Verify you are using a 24GB GPU and no other models are loaded. |
-| API cannot reach model | `curl http://localhost:11434/v1/models` | Ensure `model` container is healthy and finished downloading weights. |
-| Database Connection Failed | `docker compose logs api` | Verify `postgres` container is up. Ensure Alembic migrations succeeded. |
-| Frontend 502 Bad Gateway | Browser Network Tab | The Next.js rewrite failed to reach the `api` container. Ensure `api` is running on port 8000. |
+| Container won't start | RunPod Logs Tab | Check the RunPod console logs for crash reasons or missing `HF_TOKEN`. |
+| vLLM OOM Error | RunPod Logs Tab | Verify you are using a GPU with >= 24GB VRAM and no other models are loaded. |
+| API cannot reach model | API logs in RunPod | Ensure vLLM successfully downloaded weights and passed the smoke test. |
+| Database Connection Failed | API logs in RunPod | Verify `/workspace` is mounted and writable for `maieutic.db`. |
+| Frontend 502 Bad Gateway | Browser Network Tab | The Next.js proxy failed to reach the FastAPI backend. Check RunPod logs. |
 
 ## 15. Useful Commands
 
+(Execute these inside the RunPod Web Terminal)
+
 ```bash
-docker compose ps               # List all containers
-docker compose logs -f          # Tail all logs
-docker compose logs -f model    # Tail model logs specifically
-docker compose restart api      # Restart the backend
-nvidia-smi                      # Check GPU usage on the host
-docker compose down             # Stop and remove all containers
+ps aux                          # List all running processes (Next.js, FastAPI, vLLM)
+nvidia-smi                      # Check GPU usage and VRAM
+ls -lh /workspace/maieutic.db   # Check SQLite database size
 ```
 
 ## 16. Deployment Checklist
 
-- [ ] RunPod GPU selected (>= 24GB VRAM)
-- [ ] Persistent volume attached
-- [ ] HF_TOKEN configured in `.env`
-- [ ] `docker compose up -d` executed
-- [ ] Base model downloaded
-- [ ] Maieutic LoRA downloaded
-- [ ] vLLM healthy
-- [ ] FastAPI healthy
+- [ ] RunPod GPU Pod created (>= 24GB VRAM)
+- [ ] Persistent volume attached (>= 40GB) to `/workspace`
+- [ ] `HF_TOKEN` configured in RunPod Environment Variables
+- [ ] RunPod Pod Started
+- [ ] Base model downloaded (view in logs)
+- [ ] Maieutic LoRA downloaded (view in logs)
+- [ ] vLLM healthy (view in logs)
+- [ ] FastAPI & Next.js healthy
 - [ ] Frontend accessible via RunPod Proxy (Port 3000)
 
 ## 17. Architecture Maintenance Notes
 
 - Do **NOT** put model weights into the application Docker image.
-- Do **NOT** expose PostgreSQL, Redis, Qdrant, or vLLM publicly.
-- Do **NOT** use `localhost` for inter-container communication (use service names).
-- Do **NOT** remove persistent model storage (or you will wait 10 minutes per restart).
+- Do **NOT** expose the API or vLLM publicly. Next.js handles proxying safely.
+- Do **NOT** attempt to use `docker-compose` on RunPod; we use a single unified image.
+- Do **NOT** remove persistent model storage from `/workspace` (or you will wait 10 minutes per restart for HF downloads).

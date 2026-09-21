@@ -33,14 +33,15 @@ huggingface-cli download "${BASE_MODEL}"
 
 echo "[Bootstrap] Downloading LoRA adapter from ${LORA_REPO}..."
 huggingface-cli download "${LORA_REPO}" \
-    --include "adapter_config.json" "adapter_model.safetensors" "tokenizer.json" "tokenizer_config.json" "chat_template.jinja"
+    --include "adapter_config.json" "adapter_model.safetensors" "tokenizer.json" "tokenizer_config.json" "chat_template.jinja" \
+    --local-dir /workspace/lora_adapter
 
 echo "[Bootstrap] Starting vLLM model server..."
 # Start vLLM in the background so we can wait for readiness and run a smoke test
 python3 -m vllm.entrypoints.openai.api_server \
     --model "${BASE_MODEL}" \
     --enable-lora \
-    --lora-modules "${LORA_NAME}=${LORA_REPO}" \
+    --lora-modules "${LORA_NAME}=/workspace/lora_adapter" \
     --max-lora-rank 16 \
     --host 0.0.0.0 \
     --port 11434 &
@@ -48,6 +49,10 @@ VLLM_PID=$!
 
 echo "[Bootstrap] Waiting for vLLM to become healthy..."
 until curl -sf http://localhost:11434/v1/models >/dev/null; do
+    if ! kill -0 $VLLM_PID 2>/dev/null; then
+        echo "[Bootstrap] ERROR: vLLM process crashed! Check RunPod logs for Python tracebacks or OOM errors."
+        exit 1
+    fi
     echo "Waiting for vLLM..."
     sleep 5
 done

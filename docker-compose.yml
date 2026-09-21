@@ -1,25 +1,85 @@
 version: '3.8'
 
 services:
-  maieutic:
-    build: .
-    container_name: maieutic_app
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: maieutic_frontend
     ports:
       - "3000:3000"
-      - "8000:8000"
-      - "11434:11434"
-      - "6333:6333"
-    volumes:
-      - postgres_data:/workspace/postgres/data
-      - ollama_data:/workspace/ollama
-      - qdrant_data:/workspace/qdrant
-      - redis_data:/workspace/redis
     environment:
-      - OLLAMA_MODEL=qwen2
-      - LLM_API_KEY=${LLM_API_KEY:-}
+      - NODE_ENV=production
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: maieutic_api
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/mentorai
+      - REDIS_URL=redis://redis:6379
+      - QDRANT_URL=http://qdrant:6333
+      - LLM_BASE_URL=http://model:11434/v1
+      - LLM_MODEL=mentorai
+      - LLM_API_KEY=local
+    depends_on:
+      postgres:
+        condition: service_started
+      model:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: maieutic_postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=mentorai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: maieutic_redis
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.8.4
+    container_name: maieutic_qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  model:
+    image: vllm/vllm-openai:v0.6.2
+    container_name: maieutic_model
+    # RunPod GPU pods use standard nvidia-docker configuration
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+      - ./scripts/model_bootstrap.sh:/app/model_bootstrap.sh
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+    entrypoint: ["/bin/bash", "/app/model_bootstrap.sh"]
+    restart: unless-stopped
 
 volumes:
   postgres_data:
-  ollama_data:
-  qdrant_data:
   redis_data:
+  qdrant_data:
+  hf_cache:

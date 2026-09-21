@@ -16,7 +16,7 @@ export default function Home() {
   useEffect(() => {
     async function fetchSession() {
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "/api"
         const response = await fetch(`${baseUrl}/session/${sessionId}`)
         if (response.ok) {
           const data = await response.json()

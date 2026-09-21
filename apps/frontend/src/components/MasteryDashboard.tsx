@@ -16,7 +16,7 @@ export function MasteryDashboard({ userId }: { userId: string }) {
   useEffect(() => {
     async function fetchData() {
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "/api"
         const response = await fetch(`${baseUrl}/brain/${userId}`)
         if (response.ok) {
           const data = await response.json()

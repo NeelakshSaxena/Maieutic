@@ -38,6 +38,7 @@ huggingface-cli download "${LORA_REPO}" \
 
 echo "[Bootstrap] Starting vLLM model server..."
 # Start vLLM in the background so we can wait for readiness and run a smoke test
+export VLLM_USE_V1=0
 python3 -m vllm.entrypoints.openai.api_server \
     --model "${BASE_MODEL}" \
     --enable-lora \

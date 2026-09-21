@@ -38,44 +38,45 @@ The architecture is split into distinct components:
 
 ============================================================
 # Deployment
-============================================================
 
 ## 1. Architecture Overview
 
-Maieutic is deployed on RunPod using a Docker Compose stack of 6 independent containers.
+Maieutic is designed to be deployed on RunPod using a single unified Docker container to minimize Docker-in-Docker complexity and ensure the simplest possible setup for an MVP.
 
 ```mermaid
 graph TD
-    User([User / Browser]) -->|HTTP 3000| Frontend[Frontend: Next.js]
-    Frontend -->|Next.js Rewrites| API[API: FastAPI]
+    User([User / Browser]) -->|HTTP 3000| Container
     
-    API -->|SQL| DB[(PostgreSQL)]
-    API -->|TCP| Redis[(Redis Cache)]
-    API -->|HTTP| Qdrant[(Qdrant VectorDB)]
-    API -->|HTTP OpenAI API| Model[Model Server: vLLM]
+    subgraph Single RunPod Container
+        Frontend[Frontend: Next.js (Port 3000)]
+        API[API: FastAPI (Port 8000)]
+        Model[Model Server: vLLM (Port 11434)]
+        
+        Frontend -->|Internal Proxy| API
+        API -->|Localhost| Model
+        API -->|SQL| DB[(SQLite: maieutic.db)]
+    end
     
     Model --> GPU[NVIDIA GPU]
     
-    subgraph Persistent Storage
-    DB
-    Redis
-    Qdrant
-    HF_Cache[(HF Cache Volume)]
+    subgraph Persistent Storage /workspace
+        DB
+        HF_Cache[(HF Cache)]
     end
     
     Model -.-> HF_Cache
 ```
 
-- **PUBLIC**: Only the Next.js `frontend` (Port 3000) is accessible from the internet.
-- **INTERNAL**: `FastAPI`, `PostgreSQL`, `Redis`, `Qdrant`, and `vLLM` run on an internal Docker network and are not exposed.
-- **Why?**: The Next.js frontend securely proxies `/api/*` requests to FastAPI, avoiding CORS complexities and preventing arbitrary public queries against your expensive GPU instance or internal databases.
+- **PUBLIC**: Only the Next.js frontend (Port 3000) is accessible from the internet.
+- **INTERNAL**: FastAPI and vLLM run natively on `localhost` within the container. Next.js proxies `/api/*` requests to `localhost:8000`.
+- **DATABASE**: To keep the setup simple and robust, PostgreSQL has been replaced by SQLite (`maieutic.db`) stored on the persistent volume.
 
 ## 2. Prerequisites
 
 To deploy the full stack on RunPod, you must have:
 - A RunPod account with billing active.
-- A GPU instance with at least **24GB VRAM** (e.g., RTX 3090, RTX 4090, or A5000). The 8B model requires ~16GB in bf16, leaving sufficient headroom for the PEFT adapter and vLLM KV cache.
-- A **persistent volume** attached to the RunPod Pod (minimum 40GB to hold model weights + databases).
+- A GPU Pod (e.g., RTX 3090, RTX 4090, or A5000) with at least **24GB VRAM**.
+- A **persistent volume** attached to the RunPod Pod (minimum 40GB).
 - A Hugging Face account and an Access Token (`HF_TOKEN`) with read permissions for the private LoRA repository.
 
 ## 3. Model Architecture
@@ -100,11 +101,9 @@ The deployment relies on the following files:
 │   ├── api/
 │   └── frontend/
 ├── scripts/
-│   ├── start_api.sh        # Runs Alembic migrations and starts FastAPI
-│   └── model_bootstrap.sh  # Validates GPU, downloads LoRA/base model to cache, starts vLLM
-├── docker-compose.yml      # The orchestration blueprint for RunPod
-├── Dockerfile.api          # Builds the ghcr.io image for the backend
-├── Dockerfile.frontend     # Builds the ghcr.io image for the frontend
+│   ├── runpod_entrypoint.sh  # Unified entrypoint for all 3 processes
+│   └── model_bootstrap.sh    # Validates GPU, downloads LoRA/base model to cache, starts vLLM
+├── Dockerfile.runpod         # The single image encapsulating the entire stack
 ```
 
 ## 5. Environment Variables
@@ -114,15 +113,8 @@ The deployment relies on the following files:
 | **APPLICATION** | | | |
 | `NODE_ENV` | Yes | `production` | Optimizes Next.js performance |
 | `LLM_MODEL` | Yes | `mentorai` | Model name FastAPI requests |
-| `LLM_BASE_URL` | Yes | `http://model:11434/v1` | Internal vLLM OpenAI endpoint |
+| `LLM_BASE_URL` | Yes | `http://localhost:11434/v1` | Internal vLLM OpenAI endpoint |
 | `LLM_API_KEY` | Yes | `local` | Passed to vLLM |
-| **DATABASE** | | | |
-| `DATABASE_URL` | Yes | `postgresql://postgres:postgres@postgres:5432/mentorai` | Database connection string |
-| `REDIS_URL` | Yes | `redis://redis:6379` | Internal Redis |
-| `QDRANT_URL` | Yes | `http://qdrant:6333` | Internal Qdrant |
-| `POSTGRES_USER` | Yes | `postgres` | Postgres setup |
-| `POSTGRES_PASSWORD`| Yes | `postgres` | Postgres setup |
-| `POSTGRES_DB` | Yes | `mentorai` | Postgres setup |
 | **AUTH / API KEYS** | | | |
 | `HF_TOKEN` | Yes | `hf_your_token_here` | Allows vLLM to download the private LoRA adapter |
 
@@ -130,7 +122,7 @@ The deployment relies on the following files:
 
 ## 6. Building the Images
 
-The application images are built automatically via GitHub Actions on every push to `main`.
+The application image is built automatically via GitHub Actions on every push to `main`.
 
 ```text
 git push
@@ -138,8 +130,7 @@ git push
 GitHub Actions
    ↓
 Builds:
-- ghcr.io/neelakshsaxena/maieutic-frontend:latest
-- ghcr.io/neelakshsaxena/maieutic-api:latest
+- ghcr.io/neelakshsaxena/maieutic-runpod:latest
    ↓
 GHCR (GitHub Container Registry)
 ```
@@ -148,105 +139,55 @@ The CI/CD pipeline does NOT touch the multi-GB AI models. It strictly packages t
 
 ## 7. Local Development
 
-You can run the entire stack locally for development (assuming you have Docker and a sufficiently large local GPU).
+You can run the unified image locally for development (assuming you have Docker and a sufficiently large local GPU).
 
 ```bash
-# Start all services and build locally
-docker compose up --build -d
+# Build and run locally
+docker build -t maieutic-runpod -f Dockerfile.runpod .
+docker run --gpus all -p 3000:3000 -v $(pwd)/workspace:/workspace -e HF_TOKEN=your_token maieutic-runpod
 ```
-
-- **Frontend**: Available at `http://localhost:3000`
-- **vLLM Logs**: Check via `docker compose logs -f model` to watch the model download.
-- **Stop**: `docker compose down`
 
 ## 8. RunPod Deployment — Step by Step
 
 ### Step 1 — Create the Pod
 1. Log into RunPod and navigate to **Pods**.
 2. Deploy a GPU Pod (e.g. RTX 4090).
-3. Select **RunPod Pytorch** base image (or any base image with Docker/Compose installed).
-4. Assign at least **40GB** of Persistent Volume.
-5. In **Expose HTTP Ports**, ensure only `3000` is exposed.
+3. Select **Custom Template**.
+4. Set **Container Image** to `ghcr.io/neelakshsaxena/maieutic-runpod:latest`.
+5. Assign at least **40GB** of Persistent Volume to `/workspace`.
+6. Set **Environment Variables**: `HF_TOKEN=hf_your_token_here`.
+7. In **Expose HTTP Ports**, ensure `3000` is exposed.
 
-### Step 2 — Connect and Clone
-SSH into the RunPod or use the Web Terminal.
+### Step 2 — Monitor Startup
+Once the Pod starts, open the **Logs** tab in RunPod to monitor the startup sequence.
 
-```bash
-cd /workspace
-git clone https://github.com/NeelakshSaxena/Maieutic.git
-cd Maieutic
-```
-
-### Step 3 — Configure Environment Variables
-Create an `.env` file in the root of the repository:
-
-```bash
-echo "HF_TOKEN=hf_your_token_here" > .env
-```
-
-The `docker-compose.yml` natively passes this to the `model` service for bootstrapping. Other environment variables (like `DATABASE_URL`) are pre-configured internally in the `docker-compose.yml`.
-
-### Step 4 — Start the Stack
-Deploy the entire infrastructure using Docker Compose:
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-### Step 5 — Monitor Startup
-Monitor the startup sequence, particularly the `model` container which downloads the LoRA.
-
-```bash
-docker compose logs -f model
-```
 Expected output:
 ```text
+[Entrypoint] Detected /workspace persistent volume.
 [Bootstrap] Verifying GPU...
 [Bootstrap] Downloading/Verifying models in HF Cache...
 [Bootstrap] Downloading LoRA adapter from NeelakshSaxena/mentorai...
 [Bootstrap] Starting vLLM model server...
-[Bootstrap] vLLM is healthy!
-[Bootstrap] Smoke test passed!
-```
-
-Next, monitor the API container:
-```bash
-docker compose logs -f api
-```
-Expected output:
-```text
-[API] Waiting for Postgres...
 [API] Running database migrations...
-[API] Starting FastAPI application...
-INFO:     Uvicorn running on http://0.0.0.0:8000
+[API] Starting Uvicorn...
+[Entrypoint] Starting Next.js Frontend...
+[Bootstrap] vLLM is healthy!
 ```
 
-### Step 6 — Verify Health
+### Step 3 — Verify Health
 Once everything is running, access the application via your RunPod Proxy URL (Port `3000`).
-
-To verify the model inference locally on the Pod:
-```bash
-curl -X POST http://localhost:11434/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer local" \
-  -d '{
-    "model": "mentorai",
-    "messages": [{"role": "user", "content": "What is 2+2?"}]
-  }'
-```
 
 ## 9. First Startup vs Subsequent Startup
 
 **FIRST START:**
-1. Pulls Docker images.
-2. Creates Docker volumes for Postgres, Redis, Qdrant, and Hugging Face Cache.
-3. The `model_bootstrap.sh` script downloads `Qwen/Qwen3-8B` and the `mentorai` adapter to `/root/.cache/huggingface`. (Takes 5-10 minutes depending on network).
+1. Pulls the unified Docker image.
+2. Creates Hugging Face Cache and SQLite database on the persistent volume (`/workspace`).
+3. The `model_bootstrap.sh` script downloads `Qwen/Qwen3-8B` and the `mentorai` adapter. (Takes 5-10 minutes depending on network).
 4. `vLLM` loads the weights into VRAM.
-5. `api` runs Alembic migrations.
+5. FastAPI runs Alembic migrations on SQLite.
 
 **SUBSEQUENT START:**
-1. Persistent volumes already contain the 16GB of weights.
+1. Persistent volume already contains the 16GB of weights and the SQLite database.
 2. `model_bootstrap.sh` detects the cache and skips the download.
 3. `vLLM` immediately loads weights into VRAM (takes < 30 seconds).
 
@@ -255,43 +196,35 @@ curl -X POST http://localhost:11434/v1/chat/completions \
 When application code is modified (e.g. Next.js or FastAPI):
 1. Run `git push` to `main`.
 2. Wait for GitHub Actions to build new images.
-3. On RunPod, run:
-```bash
-docker compose pull
-docker compose up -d
-```
-Docker Compose will intelligently recreate ONLY the `frontend` and `api` containers. The `model`, `postgres`, `redis`, and `qdrant` containers (and their persistent data) remain completely untouched and online.
+3. On RunPod, simply **Restart the Pod**.
+4. RunPod will automatically pull the `:latest` tag on restart (if your template is configured for 'Always Pull').
 
 ## 11. Updating the Model / LoRA
 
 If you push a new LoRA to Hugging Face, the persistent volume will not automatically fetch it because it relies on the cache.
 To force an update:
 
-1. Stop the model container: `docker compose stop model`
+1. Open the RunPod Web Terminal.
 2. Clear the specific Hugging Face cache folder inside the persistent volume.
 ```bash
-# This requires knowing exactly where Docker stores the volume on RunPod, 
-# or you can temporarily use a bash shell inside the model container:
-docker compose run --rm --entrypoint bash model
-rm -rf /root/.cache/huggingface/hub/models--NeelakshSaxena--mentorai
-exit
+rm -rf /workspace/huggingface_cache/hub/models--NeelakshSaxena--mentorai
 ```
-3. Restart the model container: `docker compose up -d model`
+3. Restart the Pod.
 4. The bootstrap script will re-download the latest LoRA revision.
 
 ## 12. Networking
 
 Browser → `https://<runpod-id>-3000.proxy.runpod.net` → Next.js (Port 3000)
-Next.js API route (`/api/*`) → Proxied via Rewrites → `http://api:8000` (FastAPI)
-FastAPI → `http://model:11434/v1` (vLLM)
+Next.js API route (`/api/*`) → Proxied via Rewrites → `http://localhost:8000` (FastAPI)
+FastAPI → `http://localhost:11434/v1` (vLLM)
 
-Because Docker manages internal DNS via service names (`api`, `postgres`, `model`), containers communicate using these names instead of `localhost`.
+Because all processes run in the same container, they communicate securely via `localhost`.
 
 ## 13. Security
 
 - **Public**: Only Port 3000 (Next.js).
-- **Internal Only**: Ports 8000, 11434, 5432, 6379, 6333 are protected by the Docker network.
-- **Secrets**: `HF_TOKEN` is passed to the container at runtime. Never commit this to Git.
+- **Internal Only**: Ports 8000 and 11434 are never exposed outside the container.
+- **Secrets**: `HF_TOKEN` is passed via RunPod Environment Variables securely.
 
 ## 14. Troubleshooting
 

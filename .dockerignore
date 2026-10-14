@@ -1,24 +1,43 @@
 .git
 .gitignore
-.next
+.github
+
+# Dependencies and build output
 node_modules
-__pycache__
-*.pyc
+apps/frontend/node_modules
+.next
+apps/frontend/.next
+*.tsbuildinfo
 venv
 .venv
+__pycache__
+*.pyc
+.pytest_cache
+
+# Local env/secrets (compose injects env via env_file at runtime)
 .env
 .env.*
+envvv
+apps/frontend/.env.local
+
+# Local data, caches, logs, binaries
 postgres_data
 redis_data
 qdrant_data
 ollama_data
 *.db
-maieutic.db
-.github
+*.log
+.cache
+.hf_cache
+.agents
+.claude
+*.exe
+
+# Not needed in images
 tests
 docs
 training
+outputs
 .vscode
 .idea
-*.log
 .DS_Store

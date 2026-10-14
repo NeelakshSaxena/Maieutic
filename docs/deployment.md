@@ -1,17 +1,8 @@
 # MentorAI — Deployment
 
-## Development & MVP (Current Phase)
+## Current deployment modes
 
-The MVP is deployed as a single, unified Docker container designed to run seamlessly on a GPU RunPod instance. This eliminates Docker-in-Docker complexity while encapsulating the entire stack.
-
-**Services (Single Container):**
-- `frontend`: Next.js App Router (Port 3000)
-- `api`: FastAPI Python Backend (Port 8000)
-- `model`: vLLM Server serving Qwen3-8B + LoRA (Port 11434)
-- `db`: SQLite database stored on persistent volume (`/workspace/maieutic.db`)
-
-**Inference:**
-The MVP relies on a local vLLM instance running natively inside the same container. The frontend proxies requests to the FastAPI backend, which directly communicates with the local vLLM instance via `localhost`.
+The supported modes (RunPod Serverless/Pod, RunPod backend plus local frontend, and fully local Docker Compose with Ollama) are documented, with commands, in [`../DEPLOYMENT.md`](../DEPLOYMENT.md). The earlier single-container RunPod image is archived in [legacy-runpod-unified-image.md](legacy-runpod-unified-image.md).
 
 ## Staging & Production Target
 

@@ -5,7 +5,6 @@ mentorai/
 ├── .gitignore
 ├── .env.example
 ├── docker-compose.yml
-├── Makefile
 │
 ├── docs/
 │   ├── PRD.md

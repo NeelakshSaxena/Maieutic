@@ -19,11 +19,16 @@ COPY apps/api/pyproject.toml apps/api/poetry.lock* ./
 RUN poetry install --no-root --without dev
 COPY apps/api/ ./
 
-# Expose API (8000)
+# Expose API port for Pod / Container deployment
 EXPOSE 8000
 
-# Start script
+# Health check for persistent HTTP server mode (skips in Serverless mode)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD if [ "$RUNPOD_MODE" = "serverless" ]; then exit 0; else curl -f http://localhost:8000/health || exit 1; fi
+
+# Start script supporting both Pod and Serverless runtimes
 COPY scripts/start_api.sh /app/start_api.sh
 RUN chmod +x /app/start_api.sh
 
 CMD ["/app/start_api.sh"]
+

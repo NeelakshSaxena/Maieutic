@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_orchestrator
 from app.agents.orchestrator import Orchestrator
+from app.core.llm_client import LLMUnavailableError, LLMModelNotFoundError
 from app.schemas.api_schemas import ChatRequest, ChatResponse
 from app.services.student_brain import StudentBrainService
 
@@ -11,6 +12,10 @@ api_router = APIRouter()
 async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     orchestrator = get_orchestrator(db)
     try:
+        import logging
+        logging.info(f"[MentorAI] Request received! LLM model is loaded and processing request for user {request.user_id}...")
+        print("[MentorAI] Active Request: Processing inference via local Ollama. This may take 60-120 seconds...")
+        
         res = await orchestrator.process_student_input(
             session_id=request.session_id,
             student_id=request.user_id,
@@ -18,22 +23,29 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         )
         
         cp = res.get("next_checkpoint") or res.get("checkpoint")
-        
+        msg = res.get("message")
+        if not msg:
+            if res.get("hint"):
+                hint_obj = res["hint"]
+                msg = getattr(hint_obj, "hint_text", None) or (hint_obj.get("hint_text") if isinstance(hint_obj, dict) else None)
+            elif cp:
+                task = getattr(cp, "task", None) or (cp.get("task") if isinstance(cp, dict) else None)
+                if res.get("type") == "correct":
+                    msg = f"Great job! That's correct. Next task: {task}"
+                else:
+                    msg = f"Let's get started. Your task: {task}"
+
         return ChatResponse(
             type=res.get("type", "error"),
-            message=res.get("message"),
-            next_checkpoint=cp.model_dump() if cp else None,
-            hint=res.get("hint").model_dump() if res.get("hint") else None,
-            verification=res.get("verification").model_dump() if res.get("verification") else None
+            message=msg,
+            next_checkpoint=cp.model_dump() if hasattr(cp, "model_dump") else (cp if isinstance(cp, dict) else None),
+            hint=res.get("hint").model_dump() if hasattr(res.get("hint"), "model_dump") else (res.get("hint") if isinstance(res.get("hint"), dict) else None),
+            verification=res.get("verification").model_dump() if hasattr(res.get("verification"), "model_dump") else (res.get("verification") if isinstance(res.get("verification"), dict) else None)
         )
     except Exception as e:
-        error_msg = str(e)
-        if "Connection error" in error_msg or "connect" in error_msg.lower():
-            raise HTTPException(
-                status_code=503, 
-                detail="The AI model is still downloading or initializing. This takes 5-10 minutes on the first startup. Please wait a moment and try again!"
-            )
-        raise HTTPException(status_code=500, detail=error_msg)
+        if isinstance(e, (LLMUnavailableError, LLMModelNotFoundError)):
+            raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/session/{session_id}")
 async def get_session_endpoint(session_id: str, db: Session = Depends(get_db)):

@@ -6,7 +6,7 @@ This document covers common administrative tasks for the PostgreSQL database in 
 
 **Launch `psql` inside the container:**
 ```bash
-docker compose exec db psql -U postgres -d postgres
+docker compose exec postgres psql -U postgres -d mentorai
 ```
 
 ## Common Queries

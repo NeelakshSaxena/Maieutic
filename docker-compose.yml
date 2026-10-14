@@ -1,85 +1,110 @@
-version: '3.8'
-
 services:
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    container_name: maieutic_frontend
+      args:
+        - NEXT_PUBLIC_API_URL=/api
+        - NEXT_PUBLIC_HEALTH_URL=/health/llm
+    container_name: mentorai_frontend
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
+      - API_INTERNAL_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=/api
+      - NEXT_PUBLIC_HEALTH_URL=/health/llm
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
-    container_name: maieutic_api
+    container_name: mentorai_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false   # local Ollama mode works from the defaults below; .env is optional
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/mentorai
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/mentorai
       - REDIS_URL=redis://redis:6379
       - QDRANT_URL=http://qdrant:6333
-      - LLM_BASE_URL=http://model:11434/v1
-      - LLM_MODEL=mentorai
-      - LLM_API_KEY=local
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - TRANSFORM_BASE_URL=${TRANSFORM_BASE_URL:-http://host.docker.internal:11434/v1}
+      - TRANSFORM_API_KEY=${TRANSFORM_API_KEY:-ollama}
+      - TRANSFORM_MODEL=${TRANSFORM_MODEL:-qwen3.5-aggressive:latest}
+      - JUDGE_BASE_URL=${JUDGE_BASE_URL:-http://host.docker.internal:11434/v1}
+      - JUDGE_API_KEY=${JUDGE_API_KEY:-ollama}
+      - JUDGE_MODEL=${JUDGE_MODEL:-qwen3.5-aggressive:latest}
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:4000,http://127.0.0.1:4000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
-        condition: service_started
-      model:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # Optional bundled Ollama (opt-in: docker compose --profile bundled-ollama up).
+  # Default local mode uses the existing standalone `ollama` container via host.docker.internal:11434.
+  ollama:
+    profiles: ["bundled-ollama"]
+    image: ollama/ollama:latest
+    container_name: mentorai_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   postgres:
     image: postgres:15-alpine
-    container_name: maieutic_postgres
+    container_name: mentorai_postgres
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=mentorai
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mentorai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    container_name: maieutic_redis
+    container_name: mentorai_redis
     volumes:
       - redis_data:/data
     restart: unless-stopped
 
   qdrant:
     image: qdrant/qdrant:v1.8.4
-    container_name: maieutic_qdrant
+    container_name: mentorai_qdrant
     volumes:
       - qdrant_data:/qdrant/storage
-    restart: unless-stopped
-
-  model:
-    image: vllm/vllm-openai:v0.6.2
-    container_name: maieutic_model
-    # RunPod GPU pods use standard nvidia-docker configuration
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    volumes:
-      - hf_cache:/root/.cache/huggingface
-      - ./scripts/model_bootstrap.sh:/app/model_bootstrap.sh
-    environment:
-      - HF_TOKEN=${HF_TOKEN}
-    entrypoint: ["/bin/bash", "/app/model_bootstrap.sh"]
     restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
-  hf_cache:
+  ollama_data:
+

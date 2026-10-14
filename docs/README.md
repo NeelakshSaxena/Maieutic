@@ -6,19 +6,20 @@ Welcome to the MentorAI documentation. MentorAI is a Socratic tutoring assistant
 
 This directory contains both the Architectural/Product knowledge base (the single sources of truth for how the system is designed) and the Developer/Operator layer (how to actually run and interact with it).
 
-### 🚀 Getting Started
+### Getting Started
 If you are setting up the project for the first time, start here:
+- [Local Development Runbook](LOCAL_DEVELOPMENT.md) - start, verify, test, troubleshoot, maintain
 - [Getting Started](getting-started.md)
 - [Ollama Configuration](ollama.md)
 - [Troubleshooting](troubleshooting.md)
 
-### 🛠 Developer Guides
+### Developer Guides
 - [Development Guide](development.md)
 - [Testing Guide](testing.md)
 - [Docker Architecture](docker.md)
 - [Configuration](configuration.md)
 
-### ⚙️ Operations & Commands
+### Operations & Commands
 For managing databases, migrations, and CLI interactions:
 - [Commands Bible](operations/commands.md)
 - [Debugging](operations/debugging.md)
@@ -26,7 +27,7 @@ For managing databases, migrations, and CLI interactions:
 - [Reset & Recovery](operations/reset-and-recovery.md)
 - [Qdrant & Redis](operations/qdrant-operations.md)
 
-### 📐 Architecture & Product
+### Architecture & Product
 The authoritative descriptions of system components:
 - [Project Status](PROJECT_STATUS.md) - **Read this for the current state of implementation.**
 - [System Architecture](system_architecture.md)
@@ -37,7 +38,7 @@ The authoritative descriptions of system components:
 - [Security](security.md)
 - [Deployment](deployment.md)
 
-### 📜 Phases History
+### Phases History
 Historical records of the implementation phases:
 - [Phases Overview](phases.md)
 - `/phases/` - Detailed breakdown of each phase's implementation.

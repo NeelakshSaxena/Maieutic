@@ -23,7 +23,7 @@ The project is currently transitioning from its initial backend architecture bui
 ### Known Limitations
 * **Model Capability vs Product Capability:** While the system architecture works perfectly, the actual model (Experiment #1) is not fully capable of acting as the MentorAI backend until Experiment #2 is complete. Evaluation scripts will fail or produce hallucinations until a more capable model is deployed.
 * **Authentication/Security:** The MVP does not currently have robust production authentication protocols or rate-limiting.
-* **Test Suite Failures:** The current test suite fails when running `pytest tests/pipeline/` due to a missing `training/` module. These are orphaned tests that need to be migrated or removed in future phases.
+* **Tests:** `tests/pipeline/` imports the top-level `training` package, so run pytest from the repository root with `python -m pytest` (which puts the root on `sys.path`) and set `PYTHONPATH=apps/api` for the API tests. See [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md).
 
 ## What should NOT be done?
 * **DO NOT** restart training or run any fine-tuning for Experiment #1.
@@ -31,5 +31,5 @@ The project is currently transitioning from its initial backend architecture bui
 
 ## Where is the Application?
 * **Backend:** Runs on `localhost:8000` via FastAPI (`apps/api`)
-* **Frontend:** Runs on `localhost:3000` via Next.js (`apps/frontend`)
-* **Database:** PostgreSQL on `localhost:5432`, Redis on `localhost:6379`, Qdrant on `localhost:6333`.
+* **Frontend:** Runs on `localhost:4000` (host port `FRONTEND_PORT`, container port 3000) via Next.js (`apps/frontend`)
+* **Database:** PostgreSQL, Redis and Qdrant run inside the Compose network only (no host ports are published).

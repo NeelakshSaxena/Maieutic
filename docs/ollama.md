@@ -8,9 +8,9 @@ Ollama acts as the execution environment for the Qwen models. The FastAPI backen
 
 ### The Network Bridge
 
-Since MentorAI runs inside Docker, but Ollama typically runs on the host machine (to access GPU hardware directly without complex container pass-throughs on Mac/Windows), we use a Docker networking bridge: `host.docker.internal`.
+MentorAI runs in Docker Compose; Ollama runs as a separate, already-existing container named `ollama` (GPU, port 11434 published to the host). The `api` container reaches it through `host.docker.internal`. See [DEPLOYMENT.md](../DEPLOYMENT.md) for the verified setup.
 
-- **Host (Your Machine):** Ollama binds to `localhost:11434`.
+- **Host / `ollama` container:** Ollama's port is published on `localhost:11434`.
 - **Docker Network:** The `api` container accesses Ollama via `http://host.docker.internal:11434`.
 
 #### Linux Users Note
@@ -23,9 +23,9 @@ This forces the mapping and allows Linux Docker containers to speak to the host'
 
 ## 2. Model Selection
 
-In `docker-compose.yml` or your `.env` file, the model is specified via `LLM_MODEL`.
-- **MVP Default:** `qwen2` (the standard Qwen 2 7B/8B model).
-- **Production Target:** `qwen2-socratic` (the Phase 2 fine-tuned model, pending completion of Experiment #2).
+In `.env` (or the Compose defaults) the model is set by `TRANSFORM_MODEL` and `JUDGE_MODEL`.
+- **Local default:** `qwen3.5-aggressive:latest`.
+- **Production target:** the Phase 2 fine-tuned LoRA served via vLLM on RunPod.
 
 ## 3. GPU Considerations
 
@@ -38,11 +38,10 @@ Ollama automatically detects and utilizes available GPUs (Apple Silicon Metal, N
 
 | Action | Command |
 |--------|---------|
-| Start Ollama Server (if not running as a service) | `ollama serve` |
-| Pull a model | `ollama pull qwen2` |
-| List local models | `ollama list` |
-| Test model locally | `ollama run qwen2` |
-| Remove a model | `ollama rm qwen2` |
+| Start the Ollama container | `docker start ollama` |
+| List models | `docker exec ollama ollama list` |
+| Pull a model (large download; do deliberately) | `docker exec ollama ollama pull <model>` |
+| Test model | `docker exec -it ollama ollama run qwen3.5-aggressive:latest` |
 
 ## 5. Performance and Load
 

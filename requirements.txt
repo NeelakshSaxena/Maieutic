@@ -6,3 +6,4 @@ pyarrow
 pydantic
 python-dotenv
 tabulate
+tiktoken

@@ -19,7 +19,7 @@ docker compose up -d --build
 docker compose down
 ```
 
-**Stop the stack and wipe all data volumes (DB, Redis, Qdrant):**
+**Wipe all data volumes (DB, Redis, Qdrant)** - destructive, see [reset-and-recovery](reset-and-recovery.md); not a routine cleanup:
 ```bash
 docker compose down -v
 ```
@@ -35,7 +35,7 @@ docker compose logs -f
 ```bash
 docker compose logs -f api
 docker compose logs -f frontend
-docker compose logs -f db
+docker compose logs -f postgres
 ```
 
 ## Database Migrations (Alembic)
@@ -69,7 +69,7 @@ docker compose exec api python
 
 **Connect to PostgreSQL:**
 ```bash
-docker compose exec db psql -U postgres -d postgres
+docker compose exec postgres psql -U postgres -d mentorai
 ```
 
 **Connect to Redis:**
@@ -90,7 +90,7 @@ docker compose exec api pytest tests/ -v
 
 **Pull model:**
 ```bash
-ollama pull qwen2
+docker exec ollama ollama pull qwen3.5-aggressive:latest
 ```
 
 **Check if model is loaded:**

@@ -12,7 +12,9 @@ export default function Home() {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
   const [currentCheckpointId, setCurrentCheckpointId] = useState<string | null>(null)
 
-  // Fetch initial session state
+  const [llmStatus, setLlmStatus] = useState<{status: string, model: string} | null>(null)
+
+  // Fetch initial session state and LLM health
   useEffect(() => {
     async function fetchSession() {
       try {
@@ -29,7 +31,22 @@ export default function Home() {
         console.error("Failed to fetch session", e)
       }
     }
+
+    async function fetchHealth() {
+      try {
+        const healthUrl = process.env.NEXT_PUBLIC_HEALTH_URL || "/health/llm"
+        const response = await fetch(healthUrl)
+        if (response.ok) {
+          const data = await response.json()
+          setLlmStatus(data)
+        }
+      } catch (e) {
+        console.error("Failed to fetch LLM health", e)
+      }
+    }
+    
     fetchSession()
+    fetchHealth()
   }, [sessionId])
 
   const handleCheckpointChange = (checkpoint: Checkpoint) => {
@@ -56,6 +73,17 @@ export default function Home() {
           <h1 className="text-xl font-bold">MentorAI</h1>
         </div>
         <div className="ml-auto flex items-center space-x-4">
+          {llmStatus ? (
+            <div className="flex items-center space-x-2 px-3 py-1 bg-green-50 border border-green-200 rounded-full">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs font-medium text-green-700">LLM Connected: {llmStatus.model}</span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2 px-3 py-1 bg-gray-50 border border-gray-200 rounded-full">
+              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+              <span className="text-xs font-medium text-gray-500">Connecting to LLM...</span>
+            </div>
+          )}
           <div className="text-sm font-medium text-gray-500">Student: {userId}</div>
         </div>
       </header>

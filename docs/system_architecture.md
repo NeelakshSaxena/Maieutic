@@ -27,7 +27,7 @@ MVP uses a modular monolithic architecture orchestrated via Docker Compose.
 - Qdrant (Semantic search / Concept embeddings)
 
 **Inference:**
-- Local: Ollama (qwen2 / qwen2-socratic)
+- Local: Ollama (`qwen3.5-aggressive:latest`)
 - Production Target: RunPod + vLLM
 
 **Training:**
@@ -39,7 +39,7 @@ MVP uses a modular monolithic architecture orchestrated via Docker Compose.
 Student (Browser)
     |
     v
-Next.js (Port 3000)
+Next.js (container port 3000; host port 4000 in the verified local setup)
     |
     v
 FastAPI (Port 8000)
@@ -73,7 +73,7 @@ When a student responds to a checkpoint:
 All components run locally via `docker-compose.yml`:
 - `frontend` (Next.js)
 - `api` (FastAPI)
-- `db` (PostgreSQL)
+- `postgres` (PostgreSQL)
 - `redis` (Redis)
 - `qdrant` (Qdrant)
 
@@ -84,7 +84,7 @@ All components run locally via `docker-compose.yml`:
 All model calls pass through `LLMClient.generate_structured_output()`.
 
 This abstraction allows:
-- **Development:** Ollama (`qwen2`)
+- **Development:** Ollama (`qwen3.5-aggressive:latest`)
 - **Staging/Production:** RunPod + vLLM (`qwen-8b-socratic`)
 
 The Orchestrator defines Pydantic schemas, which the Model Gateway forces the LLM to output. If the LLM hallucinates schema structure, the Gateway catches the `ValidationError` and automatically retries with error feedback.

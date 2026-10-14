@@ -19,7 +19,7 @@ docker compose exec redis redis-cli
 Qdrant is the vector database for the Student Brain (concept embeddings, semantic search).
 
 **Health Check:**
-Qdrant exposes a REST API on port 6333.
+Qdrant exposes a REST API on port 6333 inside the Compose network. The port is not published to the host in the default `docker-compose.yml`; add a `ports: ["6333:6333"]` mapping to query it from the host. The current application code does not use Qdrant.
 ```bash
 curl http://localhost:6333
 ```

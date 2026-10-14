@@ -67,7 +67,7 @@ export function ChatInterface({
           if (errorData && errorData.detail) {
             errorMsg = `Error: ${errorData.detail}`;
           }
-        } catch (e) {
+        } catch {
           // Fallback to generic if not JSON
         }
         throw new Error(errorMsg);
@@ -89,12 +89,13 @@ export function ChatInterface({
         onCheckpointChange(data.next_checkpoint)
       }
 
-    } catch (error: any) {
+    } catch (error) {
       console.error(error)
+      const errorText = error instanceof Error ? error.message : "Error: Failed to communicate with the learning agent."
       setMessages(prev => [...prev, {
         id: Date.now().toString() + "_err",
         role: "system",
-        content: error.message || "Error: Failed to communicate with the learning agent."
+        content: errorText
       }])
     } finally {
       setIsLoading(false)

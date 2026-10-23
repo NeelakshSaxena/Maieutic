@@ -6,7 +6,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 
 from app.db.models import (
-    User, StudentProfile, ConceptMasteryState, MasteryAttempt, LearningSession, RevisionSchedule
+    User, StudentProfile, ConceptMasteryState, MasteryAttempt, LearningSession, RevisionSchedule,
+    SessionMessage
 )
 from app.schemas.verifier_schemas import VerificationResult
 
@@ -162,3 +163,30 @@ class StudentBrainService:
             self.db.commit()
             self.db.refresh(session)
         return session
+
+    def list_sessions(self, user_id: str):
+        """Sessions for a user, most recently updated first. Does not create a profile."""
+        profile = self.db.query(StudentProfile).filter(StudentProfile.user_id == user_id).first()
+        if not profile:
+            return []
+        return (
+            self.db.query(LearningSession)
+            .filter(LearningSession.profile_id == profile.id)
+            .order_by(LearningSession.updated_at.desc())
+            .all()
+        )
+
+    def add_message(self, session_id: str, role: str, content: str, payload: Optional[dict] = None) -> SessionMessage:
+        message = SessionMessage(session_id=session_id, role=role, content=content, payload=payload)
+        self.db.add(message)
+        self.db.commit()
+        self.db.refresh(message)
+        return message
+
+    def get_messages(self, session_id: str):
+        return (
+            self.db.query(SessionMessage)
+            .filter(SessionMessage.session_id == session_id)
+            .order_by(SessionMessage.created_at, SessionMessage.id)
+            .all()
+        )

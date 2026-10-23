@@ -1,5 +1,8 @@
 # MentorAI — Database
 
+> **Implemented schema.** The tables below are the original design. The tables actually created by the backend are defined in [`apps/api/app/db/models.py`](../apps/api/app/db/models.py) and the Alembic migrations in [`apps/api/alembic/versions`](../apps/api/alembic/versions): `users`, `student_profiles`, `concept_mastery_states`, `mastery_attempts`, `learning_sessions`, `session_messages` (one row per chat turn, so a session's conversation can be restored) and `revision_schedules`.
+
+
 MentorAI utilizes a hybrid database approach: PostgreSQL for structured relational data and Qdrant for semantic concept embeddings.
 
 ## 1. PostgreSQL (Relational State)

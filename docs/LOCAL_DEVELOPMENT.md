@@ -157,7 +157,7 @@ docker exec mentorai_postgres psql -U postgres -d mentorai -c "SELECT (SELECT co
 docker exec mentorai_api alembic current            # expect the head revision
 ```
 
-Expected tables: `users`, `student_profiles`, `concept_mastery_states`, `mastery_attempts`, `learning_sessions`, `revision_schedules`, `alembic_version`.
+Expected tables: `users`, `student_profiles`, `concept_mastery_states`, `mastery_attempts`, `learning_sessions`, `session_messages`, `revision_schedules`, `alembic_version`.
 
 ## 4. Testing the model and the chat path
 
@@ -231,11 +231,11 @@ docker logs ollama --tail 50 2>&1 | Select-String "chat/completions"
 ### 4.6 The browser learning flow
 
 1. Open http://localhost:4000. The header badge should show the LLM as connected.
-2. The UI uses a fixed session (`session-default`) and user (`user-default`), so it continues whatever that session already contains. To start from a clean plan, reset that session first ([8.3](#83-reset-a-learning-session)) and reload the page.
-3. Type a learning goal and send. A typing indicator appears until the reply arrives (up to a few minutes).
-4. The Learning Plan sidebar lists checkpoints; answer the displayed task. Correct answers advance to the next checkpoint and raise the Concept Mastery figure; wrong answers return a hint; off-topic messages return "Let's try to stay focused on the current task."
+2. A fresh browser starts a new session with a unique ID and shows the welcome screen. The active session ID is remembered in the browser (`localStorage`), so a reload returns to the same session with its conversation restored from the backend. Use **Sessions, then New session** for a clean start and **Sessions, then All sessions** to return to an earlier one. Nothing is deleted by either action. The UI acts as one student, `user-default`.
+3. Pick a suggestion (it only fills the box; edit it if you like) or type a goal, then **Start learning**. A thinking indicator with elapsed time appears until the reply arrives (a minute or two).
+4. The sidebar (a drawer on small screens) has three tabs: **Journey** (verified, current and locked checkpoints), **Concept** (objective, prerequisites, current task) and **Mastery**. Answer the displayed task. A correct answer shows a verification card and unlocks the next checkpoint; progress only changes when the backend moves the checkpoint. An incorrect or partial answer shows the verification result and a hint (generated automatically; there is no separate hint request), and **Revise my answer** puts your last answer back in the composer. Off-topic messages are redirected.
 
-This procedure was run in the Claude desktop app's built-in browser against the local stack; the first message hit the off-topic branch because the existing session already had an unrelated plan, and an on-topic answer was judged correct.
+This flow was exercised in the Claude desktop app's built-in browser against the real local stack and model: a new session, a real plan, a weak answer (partial result plus a Level 1 hint), a strong answer (correct, next checkpoint unlocked), a reload that restored the conversation, switching sessions, and a deliberately stopped API (failure panel, then **Send again**).
 
 ## 5. Tests, lint, type checks and builds
 
@@ -337,7 +337,8 @@ Do not use `docker compose down -v`, `docker volume prune` or `docker system pru
 | Frontend shows 502 or "Proxy communication error" | The `api` container is down or unhealthy, or `API_INTERNAL_URL` is wrong. | `docker compose ps`; `docker compose logs api`; the frontend expects `http://api:8000`. |
 | `/health/llm` is ok but chat returns 500 | Health does not run inference. Read the error text in the response and `docker compose logs api`. Typical causes: the model returned JSON that failed validation after retries, or a request timed out. | Retry; raise `LLM_TIMEOUT_SECONDS`; check [4.4](#44-inference-through-the-backends-own-client). |
 | Chat returns 503 mentioning the endpoint | Same causes as the health 503s, but surfaced during a real request. | As above. |
-| UI replies "Let's try to stay focused on the current task." to a new topic | The fixed `session-default` still holds an earlier plan, so your message was judged against its current checkpoint. This is expected behavior. | Answer the displayed task, or reset the session ([8.3](#83-reset-a-learning-session)). |
+| UI replies "Let's try to stay focused on the current task." | You are in an existing session, so your message is judged against its current checkpoint. This is expected. | Answer the displayed task, or start a new session from the Sessions menu. |
+| Message shows "Not delivered" and "Your message was not answered" | The request failed (backend down, model unreachable, or a validation failure after retries). Nothing is resent automatically. | Fix the cause (see the rows above), then use **Send again**. If the tutor had already scored the answer, resending counts as another attempt. |
 | Replies take 1 to 3 minutes | A 9B reasoning model; a wrong answer needs a verifier call and a hint call. | `docker exec ollama ollama ps` to confirm GPU use. Keep the model loaded with `OLLAMA_KEEP_ALIVE=-1` on the Ollama container if it unloads between requests. |
 | Frontend shows old behavior after code changes | Stale image. | `docker compose up -d --build`. |
 
@@ -347,7 +348,7 @@ Do not use `docker compose down -v`, `docker volume prune` or `docker system pru
 
 | Data | Where | Notes |
 |---|---|---|
-| Learning state (sessions, attempts, mastery, revision schedules) | Docker volume `mentorai_postgres_data` | Survives `stop`, `down`, rebuilds. Destroyed by `down -v` or deleting the volume. |
+| Learning state (sessions, conversations, attempts, mastery, revision schedules) | Docker volume `mentorai_postgres_data` | Survives `stop`, `down`, rebuilds. Destroyed by `down -v` or deleting the volume. |
 | Ollama models | Docker volume `ollama` (owned by the `ollama` container, not Compose) | Re-pulling is a multi-gigabyte download. Never prune. |
 | `.env`, `apps/frontend/.env.local` | Local, git-ignored | Hold secrets. Never commit. |
 | SQLite files `maieutic.db`, `apps/api/maieutic.db` | Repository (tracked) | Used only when `DATABASE_URL` is unset (host runs, RunPod pods). Do not delete. |
@@ -363,19 +364,20 @@ docker exec mentorai_postgres pg_dump -U postgres -d mentorai | Set-Content -Enc
 
 ### 8.3 Reset a learning session
 
-This deletes one session and its recorded attempts, and leaves users, profiles, mastery states, revision schedules and every other session untouched. Replace the id; the browser UI uses `session-default`.
+Normally you do not need this: **Sessions, then New session** starts fresh and keeps everything. Use it only to permanently remove one session. It deletes that session, its recorded attempts and its stored conversation, and leaves users, profiles, mastery states, revision schedules and every other session untouched. Get the ID from **Sessions, then Session details**, or `GET /api/sessions?user_id=user-default`.
 
 ```powershell
-$sid = "session-default"
+$sid = "<session-id>"
 @"
 BEGIN;
+DELETE FROM session_messages WHERE session_id = '$sid';
 DELETE FROM mastery_attempts WHERE session_id = '$sid';
 DELETE FROM learning_sessions WHERE id = '$sid';
 COMMIT;
 "@ | docker exec -i mentorai_postgres psql -U postgres -d mentorai -v ON_ERROR_STOP=1
 ```
 
-Then reload the browser. The next message creates a new plan. Accumulated mastery for the user is intentionally kept; deleting it would require deleting from `concept_mastery_states` and `revision_schedules` for that user's profile, which is not part of a session reset.
+If it was the session open in the browser, use New session (or reload) afterwards. Accumulated mastery for the user is intentionally kept; deleting it would require deleting from `concept_mastery_states` and `revision_schedules` for that user's profile, which is not part of a session reset.
 
 ## 9. Switching LLM providers
 

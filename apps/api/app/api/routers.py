@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_orchestrator
@@ -7,6 +8,23 @@ from app.schemas.api_schemas import ChatRequest, ChatResponse
 from app.services.student_brain import StudentBrainService
 
 api_router = APIRouter()
+
+def _persist_turn(db: Session, request: ChatRequest, response: ChatResponse) -> None:
+    """Store the student message and tutor reply so the conversation can be restored.
+
+    Best effort: a failure here must never fail the chat request itself, and nothing is
+    stored for sessions that do not exist (e.g. when the orchestrator is mocked).
+    """
+    try:
+        brain = StudentBrainService(db=db)
+        if not brain.get_session(request.session_id):
+            return
+        brain.add_message(request.session_id, "student", request.message)
+        brain.add_message(request.session_id, "tutor", response.message or "", payload=response.model_dump())
+    except Exception:
+        db.rollback()
+        logging.exception("[MentorAI] Could not persist chat turn for session %s", request.session_id)
+
 
 @api_router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
@@ -35,13 +53,15 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
                 else:
                     msg = f"Let's get started. Your task: {task}"
 
-        return ChatResponse(
+        response = ChatResponse(
             type=res.get("type", "error"),
             message=msg,
             next_checkpoint=cp.model_dump() if hasattr(cp, "model_dump") else (cp if isinstance(cp, dict) else None),
             hint=res.get("hint").model_dump() if hasattr(res.get("hint"), "model_dump") else (res.get("hint") if isinstance(res.get("hint"), dict) else None),
             verification=res.get("verification").model_dump() if hasattr(res.get("verification"), "model_dump") else (res.get("verification") if isinstance(res.get("verification"), dict) else None)
         )
+        _persist_turn(db, request, response)
+        return response
     except Exception as e:
         if isinstance(e, (LLMUnavailableError, LLMModelNotFoundError)):
             raise HTTPException(status_code=503, detail=str(e))
@@ -59,7 +79,46 @@ async def get_session_endpoint(session_id: str, db: Session = Depends(get_db)):
         "goal": session.goal,
         "status": session.status,
         "current_checkpoint_id": session.current_checkpoint_id,
-        "learning_plan": session.learning_plan
+        "learning_plan": session.learning_plan,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
+    }
+
+
+@api_router.get("/sessions")
+async def list_sessions_endpoint(user_id: str, db: Session = Depends(get_db)):
+    brain = StudentBrainService(db=db)
+    sessions = []
+    for s in brain.list_sessions(user_id):
+        checkpoints = (s.learning_plan or {}).get("checkpoints", [])
+        ids = [c.get("id") for c in checkpoints]
+        sessions.append({
+            "id": s.id,
+            "goal": s.goal,
+            "status": s.status,
+            "current_checkpoint_id": s.current_checkpoint_id,
+            "checkpoint_count": len(ids),
+            "completed_checkpoints": (
+                len(ids) if s.status == "completed"
+                else (ids.index(s.current_checkpoint_id) if s.current_checkpoint_id in ids else 0)
+            ),
+            "created_at": s.created_at,
+            "updated_at": s.updated_at,
+        })
+    return {"user_id": user_id, "sessions": sessions}
+
+
+@api_router.get("/session/{session_id}/messages")
+async def get_session_messages_endpoint(session_id: str, db: Session = Depends(get_db)):
+    brain = StudentBrainService(db=db)
+    if not brain.get_session(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "session_id": session_id,
+        "messages": [
+            {"id": m.id, "role": m.role, "content": m.content, "payload": m.payload, "created_at": m.created_at}
+            for m in brain.get_messages(session_id)
+        ],
     }
 
 @api_router.get("/brain/{user_id}")

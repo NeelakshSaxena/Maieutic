@@ -74,6 +74,7 @@ class LearningSession(Base):
     # Relationships
     profile = relationship("StudentProfile", back_populates="learning_sessions")
     attempts = relationship("MasteryAttempt", back_populates="session")
+    messages = relationship("SessionMessage", back_populates="session", order_by="SessionMessage.created_at")
 
 class RevisionSchedule(Base):
     __tablename__ = "revision_schedules"
@@ -86,3 +87,16 @@ class RevisionSchedule(Base):
     
     # Relationships
     profile = relationship("StudentProfile", back_populates="revision_schedules")
+
+
+class SessionMessage(Base):
+    """One chat turn (student or tutor) so a session's conversation can be restored."""
+    __tablename__ = "session_messages"
+    id = Column(String, primary_key=True, default=generate_uuid)
+    session_id = Column(String, ForeignKey("learning_sessions.id"), index=True)
+    role = Column(String)  # "student" or "tutor"
+    content = Column(String)
+    payload = Column(JSON, nullable=True)  # tutor turns: the full chat response (type, hint, verification, next_checkpoint)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    session = relationship("LearningSession", back_populates="messages")

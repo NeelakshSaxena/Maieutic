@@ -28,7 +28,7 @@ The backend, not the model, controls progression: the model proposes a verificat
 | Progressive hints | Implemented | Four levels; the level resets on a correct answer. Hint prompt instructs the model not to reveal the answer; this is a prompt rule, not a programmatic filter. |
 | Misconception handling | Implemented | Misconceptions from the verifier steer the hint and are stored per concept. There is no separate misconception-remediation agent. |
 | Mastery tracking | Implemented | Exponential moving average per concept (alpha 0.3) plus an SM-2 style revision schedule, exposed at `/api/brain/{user_id}` and `/api/revision/{user_id}`. |
-| Web UI | Implemented | Chat, learning-plan sidebar and mastery dashboard. The UI currently uses a fixed session (`session-default`) and user (`user-default`). |
+| Web UI | Implemented | Learning workspace: welcome screen, conversation with checkpoint, verification and hint cards, a collapsible sidebar (journey, current concept, mastery), a model-connection indicator and a session switcher. Each new session gets a unique ID; sessions and their conversations are restored from the backend. All browsers act as one student (`user-default`) because there is no sign-in. |
 | Local inference with Ollama | Implemented, verified | `qwen3.5-aggressive:latest` through the OpenAI-compatible `/v1` API. |
 | RunPod Serverless worker and Pod HTTP mode | Implemented | Same image, selected by `RUNPOD_MODE`; see [DEPLOYMENT.md](DEPLOYMENT.md). |
 | Qdrant semantic memory, Redis caching | Provisioned, not integrated | Containers run, but the application code does not use them yet. |
@@ -198,7 +198,7 @@ docker compose config --quiet
 | PostgreSQL unhealthy | `docker compose logs postgres`, then `docker compose restart postgres`. |
 | Frontend cannot reach the backend | `docker compose ps` and `docker compose logs api`; the frontend forwards to `http://api:8000`. |
 | Health passes but chat fails | Health checks do not run inference. Read the error returned by `/api/chat` and the API log; see [runbook section 7](docs/LOCAL_DEVELOPMENT.md#7-recovering-from-common-failures). |
-| Old persisted learning state | The UI reuses `session-default`; [reset that session](docs/LOCAL_DEVELOPMENT.md#83-reset-a-learning-session). |
+| Old persisted learning state | Use Sessions, then New session, in the header. Nothing is deleted. To remove one session, see [resetting a session](docs/LOCAL_DEVELOPMENT.md#83-reset-a-learning-session). |
 | Slow responses | Expected for a local 9B reasoning model; check GPU use with `docker exec ollama ollama ps`. |
 
 Safety:

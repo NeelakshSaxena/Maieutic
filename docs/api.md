@@ -11,7 +11,9 @@ Application routes are mounted under `/api`; health routes are at the root. In t
 | `GET /health` | Liveness: returns `{"status": "ok"}`. Does not touch the database or the LLM. |
 | `GET /health/llm` | Calls the configured endpoint's model list (`TRANSFORM_*`) and checks the model exists. 200 with `available_models`, or 503 with a message if the endpoint is unreachable or the model is missing. Does **not** run inference. |
 | `POST /api/chat` | Main tutoring endpoint (below). |
-| `GET /api/session/{session_id}` | Session goal, status, current checkpoint id and the stored learning plan. 404 if unknown. |
+| `GET /api/session/{session_id}` | Session goal, status, current checkpoint id, the stored learning plan and `created_at` / `updated_at`. 404 if unknown (the UI treats 404 as "new session"). |
+| `GET /api/sessions?user_id=` | The student's sessions, most recently updated first: `id`, `goal`, `status`, `current_checkpoint_id`, `checkpoint_count`, `completed_checkpoints`, timestamps. Empty list for an unknown student. |
+| `GET /api/session/{session_id}/messages` | The stored conversation: `role` (`student` or `tutor`), `content`, `payload` (for tutor turns, the full chat response) and `created_at`. 404 if the session is unknown. Turns are stored only after a successful `/api/chat`; sessions created before this feature have no stored turns. |
 | `GET /api/brain/{user_id}` | Per-concept mastery (`historical_mastery`, `attempts`, `misconceptions_observed`). Creates an empty profile if needed. |
 | `GET /api/revision/{user_id}` | Spaced-repetition schedule per concept (`next_review_date`, `interval_days`, `ease_factor`). |
 
